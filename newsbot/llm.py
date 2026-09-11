@@ -34,7 +34,7 @@ SYSTEM_PROMPT = """Ты — редактор новостной ленты пр�
 - то, что меняет инструменты или подходы разработчика.
 Снижай оценку за: рекламу, вакансии, вебинары, мемы, пересказ старого,
 маркетинговый шум без фактов, узколокальные новости без значения.
-
+{profile}
 Верни СТРОГО json без пояснений вокруг:
 {"score": <0-10>, "verdict": "send"|"skip", "category": "<model|research|product|business|policy|tool|other>",
  "reason": "<одна короткая фраза почему>", "title_ru": "<заголовок по-русски, до 90 символов>",
@@ -60,7 +60,7 @@ def _now():
 
 class DeepSeek:
     def __init__(self, api_key=None, base_url=None, model=None, timeout=45,
-                 max_tokens=700, thinking=False, store=None):
+                 max_tokens=700, thinking=False, store=None, profile=None):
         self.api_key = api_key or os.environ.get("DEEPSEEK_API_KEY") or ""
         self.base_url = (base_url or os.environ.get("DEEPSEEK_BASE_URL")
                          or DEFAULT_BASE_URL).rstrip("/")
@@ -69,6 +69,7 @@ class DeepSeek:
         self.max_tokens = max_tokens
         self.thinking = thinking
         self.store = store
+        self.profile = (profile or "").strip()
         self._resolved = None
         self._ensure_cache()
 
@@ -228,12 +229,30 @@ class DeepSeek:
                     continue
         raise LLMError(last_error or "unknown error")
 
+    def system_prompt(self):
+        """The base rubric plus the reader's own interest profile.
+
+        The heuristic filter can only match words; the model is what tells an
+        AI-lab release apart from a weapons story that merely mentions a model
+        by name. Both read the same profile from config.json so they cannot
+        drift apart.
+        """
+        block = ""
+        if self.profile:
+            block = "\n\nЛичный профиль интересов этого читателя — он важнее общих критериев:\n" + self.profile
+        return SYSTEM_PROMPT.replace("{profile}", block)
+
     def judge(self, item, group=None, use_cache=True):
         """Return the model verdict dict, or None if the LLM is unavailable."""
         if not self.enabled:
             return None
         self.resolve_model()
-        uid = item.get("uid") or item.get("url") or item.get("title")
+        # The profile is part of the question, so it is part of the cache key:
+        # otherwise editing the profile would keep returning verdicts formed
+        # under the previous one.
+        import hashlib
+        tag = hashlib.sha1(self.profile.encode("utf-8")).hexdigest()[:8] if self.profile else "base"
+        uid = "%s|%s" % (tag, item.get("uid") or item.get("url") or item.get("title"))
         if use_cache:
             hit = self.cached(uid)
             if hit is not None:
@@ -247,7 +266,7 @@ class DeepSeek:
             url=item.get("url") or "",
         )
         content, tokens_in, tokens_out = self._chat([
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": self.system_prompt()},
             {"role": "user", "content": prompt},
         ])
         verdict = _loads_loose(content)

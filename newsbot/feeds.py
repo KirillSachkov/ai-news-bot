@@ -174,8 +174,14 @@ def parse_feed(payload):
     return items
 
 
-def rss(url, limit=None):
-    result = fetch(url)
+def rss(url, limit=None, etag=None, last_modified=None):
+    """Fetch and parse a feed, asking the server not to resend what we have.
+
+    The validators matter more than they look: the fast lane polls a handful of
+    feeds every ninety seconds, and without a conditional request that is a full
+    download of every feed, every time, for everyone involved.
+    """
+    result = fetch(url, etag=etag, last_modified=last_modified)
     if result.not_modified:
         return [], None, {"not_modified": True}
     if not result.ok:
@@ -389,9 +395,10 @@ def collect(source):
     return adapter(source)
 
 
-def collect_with_validators(source):
+def collect_with_validators(source, etag=None, last_modified=None):
     """Like collect(), but also returns HTTP cache validators when available."""
     if source.get("type") == "rss":
-        return rss(source["url"], source.get("limit"))
+        return rss(source["url"], source.get("limit"),
+                   etag=etag, last_modified=last_modified)
     items, error = collect(source)
     return items, error, {}

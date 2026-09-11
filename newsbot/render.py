@@ -65,11 +65,15 @@ def item_card(item, verdict=None, breaking=False, reason=None):
     lines.append("")
     lines.append("<i>%s</i>" % " · ".join(m for m in meta if m))
 
-    url = item.get("url")
-    if url:
+    # Google News hands out opaque redirect blobs that cannot be resolved with a
+    # plain request any more. Printing one is 300 characters of noise, so the
+    # link lives on the button instead, where its text is never shown.
+    url = item.get("url") or ""
+    if url and "news.google.com" not in url:
         lines.append(esc(url))
 
-    if (verdict or {}).get("reason") and reason:
+    # An interruption should say why it was worth interrupting for.
+    if breaking and (verdict or {}).get("reason"):
         lines.append("")
         lines.append("<i>почему: %s</i>" % esc(verdict["reason"]))
 
@@ -97,7 +101,7 @@ def rated_text(original_text, verdict_label):
     return "%s\n\n<b>%s</b>" % (original_text, esc(verdict_label))
 
 
-def status_text(store, cfg, chat_id=None):
+def status_text(store, cfg, chat_id=None, fast=None):
     counts = store.counts()
     feedback = counts.get("feedback") or {}
     health = store.source_health()
@@ -107,11 +111,22 @@ def status_text(store, cfg, chat_id=None):
         "источников: %d, с ошибками: %d" % (len(health), len(broken)),
         "в очереди: %s | отправлено: %s | пропущено: %s" % (
             counts.get("pending", 0), counts.get("sent", 0),
-            counts.get("expired", 0) + counts.get("dropped", 0)),
+            counts.get("expired", 0) + counts.get("dropped", 0)
+            + counts.get("stale", 0) + counts.get("duplicate", 0)),
+        "устарело: %s | дублей: %s" % (
+            counts.get("stale", 0), counts.get("duplicate", 0)),
         "оценок: 👍 %s / 👎 %s" % (feedback.get("good", 0), feedback.get("bad", 0)),
-        "лимит: %s/час, пауза между: %s мин, порог балла: %s" % (
+        "",
+        "лента: %s/час, пауза %s мин, порог %s" % (
             cfg.get("max_per_hour"), cfg.get("min_gap_minutes"), cfg.get("min_score")),
+        "важное: до %s/час, пауза %s мин, от %s баллов или %s источников" % (
+            cfg.get("breaking_max_per_hour"), cfg.get("breaking_min_gap_minutes"),
+            cfg.get("breaking_score"), cfg.get("breaking_min_groups")),
+        "свежесть: не старше %s ч" % cfg.get("max_age_hours"),
     ]
+    if fast is not None:
+        lines.append("опрос: %s источников каждые %s с, остальные каждые %s с" % (
+            fast, cfg.get("fast_interval_seconds"), cfg.get("fetch_interval_seconds")))
     if chat_id:
         lines.append("chat_id: <code>%s</code>" % chat_id)
     if broken:

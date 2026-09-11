@@ -85,7 +85,7 @@ def build(args, need_telegram=False):
             tg = Telegram(token)
         elif need_telegram:
             raise SystemExit("TELEGRAM_BOT_TOKEN is not set (see .env)")
-    llm = DeepSeek(store=store)
+    llm = DeepSeek(store=store, profile=(cfg.get("interests") or {}).get("profile"))
     return sources, cfg, store, tg, llm
 
 
@@ -116,6 +116,11 @@ def cmd_whoami(args):
 
 def cmd_check(args):
     sources, cfg, store, _, _ = build(args)
+    # x_miner reads previously stored Telegram posts, so it needs the store the
+    # same way a real collect cycle gives it; without this `check` reports a
+    # working source as broken.
+    from newsbot import x_sources
+    x_sources.set_store(store)
     targets = [s for s in sources if not args.source or s["name"] == args.source]
     print("checking %d sources\n" % len(targets))
     ok = 0
@@ -166,7 +171,12 @@ def cmd_once(args):
         for row in pending[:args.top]:
             verdict = pipeline.get_verdict(store, row["nid"])
             value = pipeline.effective_score(row, store, cfg)
-            mark = "BREAK" if scoring.is_breaking(value, row, cfg, {}) else "     "
+            stats = store.story_stats(row.get("story_id"))
+            base = pipeline.base_score(row, store, cfg, verdict=verdict)
+            breaking = pipeline.is_breaking_now(
+                value, base, row, cfg, {}, stats,
+                pipeline.item_age_hours(row), verdict)
+            mark = "BREAK" if breaking else "     "
             print("\n%s %.2f  [%s] %s" % (mark, value, row["source"], row["title"][:88]))
             if verdict:
                 print("        llm: %s (%s) %s" % (verdict.get("score"),
@@ -254,12 +264,12 @@ def cmd_models(args):
 
 
 def cmd_explain(args):
-    _, _, _, _, _ = build(args)
+    _, cfg, _, _, _ = build(args)
     sources = load_json(os.path.join(HERE, args.sources), {"sources": []})["sources"]
     item = {"title": args.title, "summary": args.summary or "", "source": args.source,
             "published": None, "extra": {}}
     source_cfg = next((s for s in sources if s["name"] == args.source), {"weight": 1.0})
-    print(scoring.explain(item, source_cfg, {}))
+    print(scoring.explain(item, source_cfg, {}, cfg=cfg))
     return 0
 
 
@@ -340,13 +350,21 @@ def cmd_test_send(args):
     chat_id = store.kv_get("chat_id")
     if not chat_id:
         raise SystemExit("chat_id unknown — send /start to the bot and run whoami")
-    tg.send_message(chat_id, "<b>Тест</b>\nЕсли ты это видишь — доставка работает.\n\n"
-                             "Дальше: <code>python3 bot.py run</code>", keyboard={
-        "inline_keyboard": [[
-            {"text": "\U0001F44D Полезно", "callback_data": "fb|g|0"},
-            {"text": "\U0001F44E Не то", "callback_data": "fb|b|0"},
-        ]]
-    })
+    # Buttons point at a real, already-delivered item: with a dummy id they
+    # would answer "not found" and prove nothing about the feedback path.
+    row = store.db.execute(
+        "SELECT nid, title FROM items WHERE status='sent' AND feedback IS NULL "
+        "ORDER BY sent_at DESC LIMIT 1").fetchone()
+    if row:
+        text = ("<b>Тест доставки</b>\nЕсли ты это видишь — доставка работает.\n\n"
+                "Кнопки ниже настоящие: они оценивают последнюю неоценённую новость\n"
+                "<i>%s</i>" % render.esc((row["title"] or "")[:90]))
+        keyboard = render.feedback_keyboard(row["nid"])
+    else:
+        text = ("<b>Тест доставки</b>\nЕсли ты это видишь — доставка работает.\n\n"
+                "Неоценённых новостей сейчас нет, поэтому кнопки не прикреплены.")
+        keyboard = None
+    tg.send_message(chat_id, text, keyboard=keyboard)
     print("sent to chat_id=%s" % chat_id)
     return 0
 

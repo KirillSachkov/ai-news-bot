@@ -29,13 +29,20 @@ from .http import fetch, fetch_json
 
 FEED_READER_UA = "Miniflux/2.2.5 (+https://miniflux.app)"
 
+# Checked live on 2026-09-11, after X's August cease-and-desist and the
+# project's 6 September restart. Only xcancel answers with an actual feed:
+#   twiiit      -> redirects to a random Nitter, which serves an HTML error page
+#   nitter-prd  -> TLS protocol error
+#   nitter-tk   -> HTML instead of a feed
+#   nitter.net  -> TLS handshake timeout
+# The dead four cost ~31s per handle per cycle and returned nothing, so they are
+# gone rather than kept "just in case". Re-add one only after it is seen to work.
+#
+# xcancel requires a one-time whitelist of the reader, keyed to this exact
+# User-Agent: do not change FEED_READER_UA without re-requesting the whitelist.
 DISCOVERY_ROUTES = (
     # (template, headers, note)
-    ("https://twiiit.com/%s/rss", {"User-Agent": FEED_READER_UA}, "twiiit"),
     ("https://rss.xcancel.com/%s/rss", {"User-Agent": FEED_READER_UA}, "xcancel"),
-    ("https://nitter.privacyredirect.com/%s/rss", {"User-Agent": FEED_READER_UA}, "nitter-prd"),
-    ("https://nitter.tiekoetter.com/%s/rss", {"User-Agent": FEED_READER_UA}, "nitter-tk"),
-    ("https://nitter.net/%s/rss", {"User-Agent": FEED_READER_UA}, "nitter.net"),
 )
 
 _STATUS_RE = re.compile(r"/status(?:es)?/(\d{6,25})")

@@ -94,22 +94,43 @@ def similar_to_any(title, titles, threshold=0.82):
     return False
 
 
-def is_fresh_enough(item, cfg):
-    hours = float(cfg.get("lookback_hours", 48))
+def item_age_hours(item):
+    """Age of an item in hours, or None when it carries no usable date."""
     published = item.get("published")
     if not published:
-        return True
+        return None
     try:
-        stamp = datetime.fromisoformat(published.replace("Z", "+00:00"))
+        stamp = datetime.fromisoformat(str(published).replace("Z", "+00:00"))
     except ValueError:
-        return True
+        return None
     if stamp.tzinfo is None:
         stamp = stamp.replace(tzinfo=timezone.utc)
-    age = (datetime.now(timezone.utc) - stamp).total_seconds() / 3600.0
+    return (datetime.now(timezone.utc) - stamp).total_seconds() / 3600.0
+
+
+def is_fresh_enough(item, cfg):
+    """Collection gate. Undated items are admitted but never treated as fresh."""
+    hours = float(cfg.get("lookback_hours", 8))
+    age = item_age_hours(item)
+    if age is None:
+        return True
     return age <= hours
 
 
-def fetch_source(source):
+def too_old_to_send(item, cfg):
+    """Delivery gate.
+
+    Separate from the collection gate on purpose: an item can sit in the queue
+    behind the hourly budget long enough to go stale after it was collected, and
+    nothing downstream used to notice.
+    """
+    age = item_age_hours(item)
+    if age is None:
+        return False
+    return age > float(cfg.get("max_age_hours", 6))
+
+
+def fetch_source(source, etag=None, last_modified=None):
     """Fetch one source. Returns (items, error, validators)."""
     kind = source.get("type")
     if kind == "x_user":
@@ -121,7 +142,8 @@ def fetch_source(source):
     if kind == "bsky_user":
         items, error = x_sources.bsky_user(source, limit=int(source.get("limit", 20)))
         return items, error, {}
-    items, error, validators = feeds.collect_with_validators(source)
+    items, error, validators = feeds.collect_with_validators(
+        source, etag=etag, last_modified=last_modified)
     return items, error, validators
 
 
@@ -136,10 +158,17 @@ def collect(store, sources, cfg, verbose=False):
         name = source["name"]
         stats["sources"] += 1
         state = store.source_state(name) or {}
-        if source.get("type") == "rss" and state.get("etag"):
-            # cheap conditional request: reuse stored validators
-            pass
-        items, error, validators = fetch_source(source)
+        items, error, validators = fetch_source(
+            source, etag=state.get("etag"), last_modified=state.get("last_modified"))
+        if validators.get("not_modified"):
+            # The server says nothing changed; stop here instead of re-parsing.
+            stats["ok"] += 1
+            stats["skipped_unchanged"] += 1
+            store.touch_source_ok(name, source.get("group"))
+            if verbose:
+                print("  [=] %-21s unchanged (304)" % name)
+            time.sleep(float(cfg.get("politeness_delay_seconds", 0.4)))
+            continue
         if error:
             stats["failed"] += 1
             stats["errors"][name] = error
@@ -162,9 +191,21 @@ def collect(store, sources, cfg, verbose=False):
             if store.exists(item["uid"]) or store.exists_url(item.get("url")):
                 store.backfill_links(item["uid"], (item.get("extra") or {}).get("links"))
                 continue
-            if store.add_item(item):
+            nid = store.add_item(item)
+            if nid:
                 stats["new"] += 1
                 fresh += 1
+                # Group it with the other carriers of the same event straight
+                # away: the count of independent carriers is both the duplicate
+                # guard and the "this is big" signal.
+                try:
+                    store.assign_story(
+                        nid, item.get("title"), item.get("summary"),
+                        name, source.get("group"),
+                        window_minutes=int(cfg.get("corroboration_window_minutes", 90)))
+                except Exception as exc:
+                    if verbose:
+                        print("  [!] story grouping failed nid=%s: %s" % (nid, exc))
         if verbose:
             print("  [ok] %-21s %3d items (%d new)" % (name, len(items), fresh))
         delay = float(cfg.get("politeness_delay_seconds", 0.4))
@@ -180,21 +221,35 @@ def collect(store, sources, cfg, verbose=False):
 # stage 2: score + judge
 # --------------------------------------------------------------------------- #
 
-def rerank_pending(store, sources, cfg, llm=None, verbose=False):
-    """Score every pending item; send the shortlist to the LLM when enabled."""
+def rerank_pending(store, sources, cfg, llm=None, verbose=False, fast=False):
+    """Score every pending item; send the shortlist to the LLM when enabled.
+
+    `fast=True` is the 90-second lane. It judges far less: that cadence runs
+    ~40x an hour, and at the full per-cycle allowance a backlog of unjudged
+    items would be re-offered to the model on every pass until it cleared -
+    turning a cheap poll into a steady spend.
+    """
     ensure_verdict_table(store)
     index = source_index(sources)
     weights = store.weights() if cfg.get("learning", True) else {}
-    pending = store.pending(limit=int(cfg.get("pending_scan_limit", 300)))
-    max_llm = int(cfg.get("llm_max_per_cycle", 15))
-    llm_floor = float(cfg.get("llm_min_heuristic", 4.0))
+    # Ordered by discovery, not by score: an unscored row carries score 0 and
+    # would otherwise sit at the bottom of a score-ordered page forever.
+    pending = store.pending(limit=int(cfg.get("pending_scan_limit", 300)),
+                            order="fresh")
+    if fast:
+        max_llm = int(cfg.get("llm_fast_max_per_cycle", 4))
+        llm_floor = float(cfg.get("llm_fast_floor", 6.0))
+    else:
+        max_llm = int(cfg.get("llm_max_per_cycle", 15))
+        llm_floor = float(cfg.get("llm_min_heuristic", 4.0))
     llm_used = 0
     judged = 0
+    llm_errors = 0
 
     scored = []
     for row in pending:
         source_cfg = index.get(row["source"], {"weight": 1.0})
-        value, reasons, keywords = scoring.score_item(row, source_cfg, weights)
+        value, reasons, keywords = scoring.score_item(row, source_cfg, weights, cfg=cfg)
         store.set_score(row["nid"], value)
         row["score"] = value
         row["_reasons"] = reasons
@@ -213,9 +268,16 @@ def rerank_pending(store, sources, cfg, llm=None, verbose=False):
                 try:
                     verdict = llm.judge(row, group=row.get("source_group"))
                 except Exception as exc:
+                    # One bad item used to abort the whole judging pass and take
+                    # every other candidate down with it.
+                    llm_errors += 1
                     if verbose:
                         print("  [!] llm failed for nid=%s: %s" % (row["nid"], exc))
-                    break
+                    if llm_errors >= 3:
+                        if verbose:
+                            print("  [!] llm failing repeatedly, skipping the rest")
+                        break
+                    continue
                 if verdict is not None:
                     set_verdict(store, row["nid"], verdict)
                     llm_used += 1
@@ -225,14 +287,38 @@ def rerank_pending(store, sources, cfg, llm=None, verbose=False):
     elif verbose:
         print("  (LLM disabled: no DEEPSEEK_API_KEY -> heuristic only)")
 
-    return {"scanned": len(scored), "judged": judged, "llm_calls": llm_used}
+    return {"scanned": len(scored), "judged": judged, "llm_calls": llm_used,
+            "llm_errors": llm_errors}
 
 
-def effective_score(row, store, cfg):
-    verdict = get_verdict(store, row["nid"])
+def base_score(row, store, cfg, verdict=None):
+    """Ranking value before corroboration: the model's verdict, else heuristic."""
+    if verdict is None:
+        verdict = get_verdict(store, row["nid"])
     if verdict and verdict.get("score") is not None:
-        return float(verdict["score"])
-    return float(row.get("score") or 0)
+        value = float(verdict["score"])
+    else:
+        value = float(row.get("score") or 0)
+    # An item with no date cannot be shown to be fresh, so it must not be able
+    # to outrank things that can.
+    if not row.get("published"):
+        value = min(value, float(cfg.get("undated_score_cap", 5.0)))
+    return value
+
+
+def effective_score(row, store, cfg, stats=None, verdict=None):
+    """Final ranking value: base score plus corroboration.
+
+    Corroboration is the honest measure of "popular": how many independent
+    groups of sources carry the same event. It is free - the data is collected
+    anyway - and it is what separates a real story from one outlet's angle.
+    """
+    value = base_score(row, store, cfg, verdict=verdict)
+    if stats is None:
+        stats = store.story_stats(row.get("story_id"))
+    if stats["groups"] >= int(cfg.get("corroboration_min_groups", 2)):
+        value += float(cfg.get("corroboration_bonus", 1.5))
+    return value
 
 
 # --------------------------------------------------------------------------- #
@@ -257,64 +343,146 @@ def _seconds_since_last(store):
     return (datetime.now(timezone.utc) - stamp).total_seconds()
 
 
+def _sends_last_day(store, kind=None):
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat(timespec="seconds")
+    rows = store.sends_since(cutoff)
+    if kind:
+        rows = [r for r in rows if r.get("kind") == kind]
+    return len(rows)
+
+
+def _seconds_since_kind(store, kind):
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat(timespec="seconds")
+    stamps = [r["ts"] for r in store.sends_since(cutoff) if r.get("kind") == kind]
+    if not stamps:
+        return 10 ** 6
+    try:
+        stamp = datetime.fromisoformat(max(stamps))
+    except ValueError:
+        return 10 ** 6
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - stamp).total_seconds()
+
+
+def is_breaking_now(value, base_value, row, cfg, weights, stats, age, verdict):
+    """Does this deserve to interrupt the hourly budget right now?
+
+    Two independent routes in, and they must stay independent:
+
+      * corroboration - several unrelated groups carry the same event, which is
+        what a person means by "everyone is talking about it";
+      * weight - the model rates it very highly on its own.
+
+    The weight route is judged on the score *before* the corroboration bonus,
+    or a well-covered story would come in through both doors at once and the
+    threshold would effectively drop by the size of the bonus. It also requires
+    an actual model verdict: heuristic scores live on a different scale, and
+    without this a wordy headline no model ever looked at could interrupt.
+
+    Stale and undated items are never breaking, whatever they score.
+    """
+    if age is None or age > float(cfg.get("max_age_hours", 6)):
+        return False
+    min_groups = int(cfg.get("breaking_min_groups", 3))
+    if stats["groups"] >= min_groups and value >= float(cfg.get("min_score", 3.0)):
+        return True
+    if verdict is None:
+        return False
+    return scoring.is_breaking(base_value, row, cfg, weights)
+
+
 def select_due(store, sources, cfg, force=False, dry=False):
     """Pick the items to deliver right now under the anti-spam budget.
 
     With dry=True nothing is marked in the database, so the selection can be
     inspected without disturbing the queue.
     """
-    index = source_index(sources)
     weights = store.weights() if cfg.get("learning", True) else {}
     min_score = float(cfg.get("min_score", 3.0))
     max_per_hour = int(cfg.get("max_per_hour", 2))
-    max_breaking = int(cfg.get("breaking_max_per_hour", 2))
+    max_breaking = int(cfg.get("breaking_max_per_hour", 3))
+    max_breaking_day = int(cfg.get("breaking_max_per_day", 12))
     min_gap = float(cfg.get("min_gap_minutes", 20)) * 60.0
+    breaking_gap = float(cfg.get("breaking_min_gap_minutes", 3)) * 60.0
 
     hour_sends = _sends_last_hour(store)
     normal_used = len([s for s in hour_sends if s.get("kind") == "news"])
     breaking_used = len([s for s in hour_sends if s.get("kind") == "breaking"])
-    gap = _seconds_since_last(store)
 
     normal_budget = max(0, max_per_hour - normal_used)
     breaking_budget = max(0, max_breaking - breaking_used)
+    if _sends_last_day(store, "breaking") >= max_breaking_day:
+        breaking_budget = 0
+
+    # Both gaps are carried through the loop and reset on every pick, so a batch
+    # cannot fire several messages back to back the way it used to.
+    gap = _seconds_since_last(store)
+    gap_breaking = _seconds_since_kind(store, "breaking")
 
     pending = store.pending(limit=int(cfg.get("pending_scan_limit", 300)))
     candidates = []
     for row in pending:
-        value = effective_score(row, store, cfg)
         verdict = get_verdict(store, row["nid"])
         if verdict and (verdict.get("verdict") == "skip"):
             if not dry:
                 store.mark(row["nid"], "rejected")
             continue
+        # Freshness is enforced here, not only at collection: an item can go
+        # stale while it waits behind the hourly budget.
+        if too_old_to_send(row, cfg):
+            if not dry:
+                store.mark(row["nid"], "stale")
+            continue
+        stats = store.story_stats(row.get("story_id"))
+        # Someone already told this story; a second carrier is a repeat.
+        if stats["sent_nid"] and stats["sent_nid"] != row["nid"]:
+            if not dry:
+                store.mark(row["nid"], "duplicate")
+            continue
+        base = base_score(row, store, cfg, verdict=verdict)
+        value = effective_score(row, store, cfg, stats=stats, verdict=verdict)
         if value < min_score:
             continue
-        source_cfg = index.get(row["source"], {"weight": 1.0})
-        breaking = scoring.is_breaking(value, row, cfg, weights)
-        candidates.append((value, breaking, row))
+        age = item_age_hours(row)
+        breaking = is_breaking_now(value, base, row, cfg, weights, stats, age, verdict)
+        candidates.append((value, breaking, row, stats))
     candidates.sort(key=lambda entry: (entry[0], entry[2].get("discovered") or ""),
                     reverse=True)
 
     chosen = []
     chosen_titles = []
-    for value, breaking, row in candidates:
-        # The same story arrives from several outlets; sending it twice is the
-        # most visible form of spam in a news feed.
+    chosen_stories = set()
+    for value, breaking, row, stats in candidates:
+        story_id = row.get("story_id")
+        if story_id and story_id in chosen_stories:
+            continue
+        # Belt and braces: clustering handles the cross-language case, this
+        # catches near-identical headlines that never shared a proper name.
         if similar_to_any(row.get("title") or "", chosen_titles):
             if not dry:
                 store.mark(row["nid"], "duplicate")
             continue
         if breaking and breaking_budget > 0:
-            chosen.append((value, breaking, row))
-            chosen_titles.append(row.get("title") or "")
-            breaking_budget -= 1
-            continue
-        if not breaking and normal_budget > 0:
-            if gap < min_gap and not force and chosen:
+            if gap_breaking < breaking_gap and not force:
                 continue
             chosen.append((value, breaking, row))
             chosen_titles.append(row.get("title") or "")
+            if story_id:
+                chosen_stories.add(story_id)
+            breaking_budget -= 1
+            gap_breaking = 0.0
+            gap = 0.0
+            continue
+        if not breaking and normal_budget > 0:
+            if gap < min_gap and not force:
+                continue
+            chosen.append((value, breaking, row))
+            chosen_titles.append(row.get("title") or "")
+            if story_id:
+                chosen_stories.add(story_id)
             normal_budget -= 1
+            gap = 0.0
     return chosen
 
 
@@ -344,10 +512,8 @@ def deliver(tg, store, chat_id, chosen, cfg, verbose=False):
             if verbose:
                 print("  [!] send failed nid=%s: %s" % (row["nid"], exc))
             continue
-        store.mark(row["nid"], "sent", sent=True)
-        if breaking:
-            store.db.execute("UPDATE sends SET kind='breaking' WHERE id=(SELECT MAX(id) FROM sends)")
-            store.db.commit()
+        store.mark(row["nid"], "sent", sent=True,
+                   kind="breaking" if breaking else "news")
         sent += 1
         if verbose:
             print("  [->] %s  (%.2f)" % ((row.get("title") or "")[:70], value))

@@ -64,6 +64,17 @@ _HAS_LATIN = re.compile(r"[A-Za-z]")
 _HAS_CYRILLIC = re.compile(r"[А-Яа-яЁё]")
 
 
+def _interest_hits(text, terms):
+    """Plain case-insensitive substring matches.
+
+    Deliberately not regex: these lists are meant to be edited by hand in
+    config.json, and a stray character in a regex would silently stop matching
+    instead of failing loudly. Substrings also handle Russian stems well -
+    "ракет" catches ракета, ракеты, ракетных.
+    """
+    return [t for t in terms if t and t in text]
+
+
 def _age_hours(published):
     if not published:
         return 6.0
@@ -88,7 +99,7 @@ def _keyword_hits(text):
     return hits
 
 
-def score_item(item, source_cfg, weights, learning=True):
+def score_item(item, source_cfg, weights, learning=True, cfg=None):
     """Return (score, reasons, keyword_list)."""
     title = (item.get("title") or "")
     summary = (item.get("summary") or "")
@@ -101,15 +112,17 @@ def score_item(item, source_cfg, weights, learning=True):
     score += base_weight
     reasons.append("source weight +%.2f" % base_weight)
 
-    # freshness: a 24h half-life-ish decay, capped
+    # Freshness is continuous and goes negative. The previous curve flattened to
+    # zero at 24h and only punished past 72h, so a one-day-old item and a
+    # two-day-old one ranked identically - which is exactly how stale news got
+    # through. Now every hour costs something: +2.0 fresh, 0 at 12h, -2.0 at a
+    # day, floored at -4.0.
     age = _age_hours(item.get("published"))
-    freshness = max(0.0, 2.0 - (age / 12.0))
-    if freshness:
-        score += freshness
-        reasons.append("freshness(%.1fh) +%.2f" % (age, freshness))
-    elif age > 72:
-        score -= 2.0
-        reasons.append("stale(%.0fh) -2.00" % age)
+    freshness = max(-4.0, min(2.0, 2.0 - (age / 6.0)))
+    score += freshness
+    reasons.append("freshness(%.1fh) %+.2f" % (age, freshness))
+    if not item.get("published"):
+        reasons.append("undated (age assumed)")
 
     # signal terms, with the title weighted double
     title_hits = _keyword_hits(title.lower())
@@ -159,12 +172,27 @@ def score_item(item, source_cfg, weights, learning=True):
         has_entity = any(term in text for term in ENTITY_TERMS)
         has_event = any(term in text for term in RELEASE_TERMS)
         if not has_entity and not has_event:
-            score -= 0.8
-            reasons.append("research without entity/event -0.80")
+            score -= 1.5
+            reasons.append("research without entity/event -1.50")
 
     if extra.get("is_ad"):
         score -= 4.0
         reasons.append("telegram ad marker -4.00")
+
+    # The reader's own interest profile, editable in config.json. This is the
+    # cheap pre-filter: it keeps subjects the reader does not want from eating
+    # the LLM budget at all. The model applies the same profile with nuance.
+    interests = (cfg or {}).get("interests") or {}
+    suppressed = _interest_hits(text, [t.lower() for t in interests.get("suppress") or []])
+    if suppressed:
+        penalty = float(interests.get("suppress_penalty", 3.0))
+        score -= penalty
+        reasons.append("off-topic '%s' -%.2f" % (suppressed[0], penalty))
+    boosted = _interest_hits(text, [t.lower() for t in interests.get("boost") or []])
+    if boosted:
+        bonus = float(interests.get("boost_bonus", 0.8))
+        score += bonus
+        reasons.append("on-topic '%s' +%.2f" % (boosted[0], bonus))
 
     # learned adjustments
     if learning and weights:
@@ -214,8 +242,8 @@ def is_breaking(score, item, cfg, weights):
     return False
 
 
-def explain(item, source_cfg, weights):
-    score, reasons, keywords = score_item(item, source_cfg, weights)
+def explain(item, source_cfg, weights, cfg=None):
+    score, reasons, keywords = score_item(item, source_cfg, weights, cfg=cfg)
     lines = ["%s" % item.get("title", "")[:100]]
     for reason in reasons:
         lines.append("    %s" % reason)

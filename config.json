@@ -1,0 +1,27 @@
+{
+  "poll_interval_seconds": 25,
+  "poll_timeout_seconds": 25,
+  "fetch_interval_seconds": 900,
+
+  "max_per_hour": 2,
+  "min_gap_minutes": 20,
+  "breaking_score": 7.0,
+  "breaking_max_per_hour": 2,
+
+  "min_score": 3.0,
+  "queue_ttl_hours": 8,
+  "lookback_hours": 48,
+  "pending_scan_limit": 300,
+  "bootstrap_items": 3,
+
+  "llm_min_heuristic": 4.0,
+  "llm_max_per_cycle": 15,
+  "llm_delay_seconds": 0.3,
+
+  "politeness_delay_seconds": 0.4,
+  "x_politeness_delay_seconds": 5.0,
+  "send_delay_seconds": 0.7,
+  "learning": true,
+
+  "settings": {}
+}

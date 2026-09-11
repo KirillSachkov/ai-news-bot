@@ -1,0 +1,21 @@
+# Secrets — never commit
+.env
+.env.local
+
+# Runtime state: items, feedback, learned weights, LLM cache
+state/
+*.db
+*.db-journal
+*.db-wal
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/

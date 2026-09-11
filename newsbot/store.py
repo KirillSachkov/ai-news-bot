@@ -287,6 +287,18 @@ class Store:
                             (round(score, 3), nid))
             self.db.commit()
 
+    def set_url(self, nid, url):
+        """Store a link that was resolved after the row was written.
+
+        Aggregator feeds hand out redirect blobs that are resolved at send time;
+        without persisting the result the buttons rebuilt later (after a rating)
+        would point back at the opaque redirect.
+        """
+        with self._lock:
+            self.db.execute("UPDATE items SET url=?, curl=? WHERE nid=?",
+                            (url, canonical_url(url), nid))
+            self.db.commit()
+
     def exists(self, uid):
         row = self.db.execute("SELECT 1 FROM items WHERE uid=?", (uid,)).fetchone()
         return row is not None

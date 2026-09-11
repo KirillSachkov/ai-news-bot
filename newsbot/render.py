@@ -82,23 +82,30 @@ def item_card(item, verdict=None, breaking=False, reason=None):
 
 
 def feedback_keyboard(nid, url=None, verdict=None):
+    link_row = []
+    # Telegram rejects the whole message when a url button carries anything but
+    # a real http(s) link, so a broken url costs the card, not just the button.
+    if url and str(url).startswith(("http://", "https://")):
+        link_row.append({"text": "\U0001F517 Источник", "url": url})
+    # After a rating the vote buttons have done their job, but the source link
+    # is exactly what the card is kept for — it stays on the message.
     if verdict:
-        return None
+        return {"inline_keyboard": [link_row]} if link_row else None
     row1 = [
         {"text": "\U0001F44D Полезно", "callback_data": "fb|g|%s" % nid},
         {"text": "\U0001F44E Не то", "callback_data": "fb|b|%s" % nid},
     ]
-    row2 = []
-    if url:
-        row2.append({"text": "\U0001F517 Источник", "url": url})
     rows = [row1]
-    if row2:
-        rows.append(row2)
+    if link_row:
+        rows.append(link_row)
     return {"inline_keyboard": rows}
 
 
 def rated_text(original_text, verdict_label):
-    return "%s\n\n<b>%s</b>" % (original_text, esc(verdict_label))
+    # Telegram hands the old message back as plain text: the card's tags are
+    # already gone, so a bare "<" or "&" in a headline would break HTML parsing
+    # and the edit — and with it the source button — would fail silently.
+    return "%s\n\n<b>%s</b>" % (esc(original_text), esc(verdict_label))
 
 
 def status_text(store, cfg, chat_id=None, fast=None):

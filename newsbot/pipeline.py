@@ -491,19 +491,23 @@ def select_due(store, sources, cfg, force=False, dry=False):
 # --------------------------------------------------------------------------- #
 
 def deliver(tg, store, chat_id, chosen, cfg, verbose=False):
-    from .http import final_url
+    from .http import final_url, google_news_url
 
     sent = 0
     for value, breaking, row in chosen:
         verdict = get_verdict(store, row["nid"])
         url = row.get("url") or ""
         # Aggregator feeds hand out redirect blobs; resolve once at send time so
-        # the reader gets the publisher's real article link.
+        # the reader gets the publisher's real article link — in the card text,
+        # where it can be copied, and on the button.
         if "news.google.com" in url:
-            resolved = final_url(url)
+            resolved = google_news_url(url) or final_url(url)
             if resolved and "news.google.com" not in resolved:
+                store.set_url(row["nid"], resolved)
                 row = dict(row)
                 row["url"] = resolved
+            elif verbose:
+                print("  [!] google link not resolved nid=%s" % row["nid"])
         text = render.item_card(row, verdict=verdict, breaking=breaking)
         keyboard = render.feedback_keyboard(row["nid"], row.get("url"))
         try:

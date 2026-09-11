@@ -296,9 +296,14 @@ class Runner:
         if chat_id and message_id:
             original = (message.get("text") or "")
             label = render.VERDICT_LABEL.get(verdict, verdict)
+            # The vote buttons go away, the source link stays: the card is
+            # read again after rating, to quote or repost the original.
+            keyboard = render.feedback_keyboard(nid, row.get("url"),
+                                                verdict=verdict)
             try:
                 self.tg.edit_text(chat_id, message_id,
-                                  render.rated_text(original, label), keyboard=None)
+                                  render.rated_text(original, label),
+                                  keyboard=keyboard or {"inline_keyboard": []})
             except Exception:
                 pass
         self.log("feedback nid=%s verdict=%s source=%s" % (nid, verdict, row["source"]))

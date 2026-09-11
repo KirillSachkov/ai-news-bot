@@ -48,6 +48,10 @@ python3 bot.py run          # или ./run.sh
 | `/help` | справка |
 
 Кнопки под новостью: **👍 Полезно**, **👎 Не то**, **🔗 Источник**.
+После оценки кнопки голосования уходят, а **🔗 Источник** остаётся —
+карточку открывают снова, чтобы взять ссылку в пост. Ссылки Google News
+разворачиваются в адрес самого издания, поэтому в тексте карточки лежит
+нормальный url, а не редирект-блоб.
 
 ---
 
@@ -317,7 +321,7 @@ python3 bot.py test-send                # проверка доставки
 bot.py                 CLI: run / once / check / whoami / stats / models / explain
 config.json            лимиты, пороги, интервалы
 sources.json           реестр источников
-newsbot/http.py        HTTP с ретраями, gzip, ETag
+newsbot/http.py        HTTP с ретраями, gzip, ETag, разворот ссылок Google News
 newsbot/feeds.py       RSS/Atom, HN, Hugging Face, Telegram-превью
 newsbot/x_sources.py   X: каскад обнаружения и контента
 newsbot/store.py       SQLite: записи, сюжеты, здоровье источников, веса

@@ -353,13 +353,13 @@ def cmd_test_send(args):
     # Buttons point at a real, already-delivered item: with a dummy id they
     # would answer "not found" and prove nothing about the feedback path.
     row = store.db.execute(
-        "SELECT nid, title FROM items WHERE status='sent' AND feedback IS NULL "
+        "SELECT nid, title, url FROM items WHERE status='sent' AND feedback IS NULL "
         "ORDER BY sent_at DESC LIMIT 1").fetchone()
     if row:
         text = ("<b>Тест доставки</b>\nЕсли ты это видишь — доставка работает.\n\n"
                 "Кнопки ниже настоящие: они оценивают последнюю неоценённую новость\n"
                 "<i>%s</i>" % render.esc((row["title"] or "")[:90]))
-        keyboard = render.feedback_keyboard(row["nid"])
+        keyboard = render.feedback_keyboard(row["nid"], row["url"])
     else:
         text = ("<b>Тест доставки</b>\nЕсли ты это видишь — доставка работает.\n\n"
                 "Неоценённых новостей сейчас нет, поэтому кнопки не прикреплены.")

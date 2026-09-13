@@ -5,17 +5,28 @@ from __future__ import annotations
 import html
 from datetime import datetime, timezone
 
-CATEGORY_ICON = {
-    "model": "\U0001F9E0",       # brain
-    "research": "\U0001F52C",    # microscope
-    "product": "\U0001F680",     # rocket
-    "business": "\U0001F4B0",    # money bag
-    "policy": "\U0001F4DC",      # scroll
-    "tool": "\U0001F6E0",        # hammer and wrench
-    "other": "\U0001F4CC",       # pushpin
+# Editorial rubrics (see editorial.md): icon and the label shown on the card.
+RUBRIC = {
+    "release": ("\U0001F9E0", "Релиз"),              # brain
+    "tool": ("\U0001F6E0", "Полезное"),              # hammer and wrench
+    "breakthrough": ("\U0001F52C", "Прорыв"),        # microscope
+    "viral": ("\U0001F92F", "Вирусное"),             # exploding head
+    "industry": ("\U0001F4B0", "Индустрия"),         # money bag
+    "safety": ("\U0001F6A8", "ИИ и безопасность"),   # rotating light
+    "outage": ("⚡", "Сбои и блокировки"),       # high voltage
+    "hardware": ("\U0001F916", "Железо и роботы"),   # robot
+    "career": ("\U0001F4BC", "Карьера"),             # briefcase
+    "other": ("\U0001F4CC", "Другое"),               # pushpin
 }
 
-VERDICT_LABEL = {"good": "\u2705 Полезно", "bad": "\u274C Не то"}
+# Verdicts written before the editorial profile carried a coarser category.
+LEGACY_CATEGORY = {"model": "release", "research": "breakthrough", "product": "release",
+                   "business": "industry", "policy": "other", "tool": "tool"}
+
+CHANNEL_LABEL = {"codecamp": "в духе @codecamp", "data_secrets": "в духе @data_secrets",
+                 "both": "для обоих каналов"}
+
+VERDICT_LABEL = {"good": "✅ Полезно", "bad": "❌ Не то"}
 
 
 def esc(value):
@@ -41,19 +52,64 @@ def human_age(published):
     return "%dд назад" % (minutes / 1440)
 
 
-def item_card(item, verdict=None, breaking=False, reason=None):
-    """Render one news card as Telegram HTML text."""
-    icon = CATEGORY_ICON.get((verdict or {}).get("category") or "other", "\U0001F4CC")
-    prefix = "\U0001F525 " if breaking else ""
-    title = esc((verdict or {}).get("title_ru") or item.get("title") or "Без заголовка")
+def rubric_of(verdict):
+    verdict = verdict or {}
+    rubric = verdict.get("rubric") or LEGACY_CATEGORY.get(verdict.get("category")) or "other"
+    return rubric if rubric in RUBRIC else "other"
 
-    body = (verdict or {}).get("summary_ru") or item.get("summary") or ""
+
+def _score_text(value):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return ""
+    return ("%d" % number) if number == int(number) else ("%.1f" % number)
+
+
+def item_card(item, verdict=None, breaking=False, reason=None, story=None):
+    """Render one news card as Telegram HTML text.
+
+    The card answers the operator's question before he opens the link: is it on
+    format (fit, rubric, which channel it resembles, why), is it already being
+    talked about (other outlets, reference channels), and what the post could
+    look like (the editor's draft).
+    """
+    verdict = verdict or {}
+    story = story or {}
+    icon, label = RUBRIC[rubric_of(verdict)]
+    prefix = "\U0001F525 " if breaking else ""
+    title = esc(verdict.get("title_ru") or item.get("title") or "Без заголовка")
+
+    body = verdict.get("summary_ru") or item.get("summary") or ""
     body = esc(body.strip())
 
-    lines = ["%s%s<b>%s</b>" % (prefix, icon, title)]
+    lines = ["%s%s <b>%s</b>" % (prefix, icon, title)]
     if body:
         lines.append("")
         lines.append(body)
+
+    lines.append("")
+    note = []
+    score = _score_text(verdict.get("score"))
+    if score:
+        note.append("\U0001F3AF %s/10" % score)
+    note.append(label)
+    channel = CHANNEL_LABEL.get(verdict.get("channel"))
+    if channel:
+        note.append(channel)
+    lines.append(" · ".join(note))
+    why = verdict.get("reason") or reason
+    if why:
+        lines.append("<i>почему: %s</i>" % esc(why))
+
+    signals = []
+    if story.get("reference"):
+        signals.append("\U0001F4E3 уже написали: %s"
+                       % ", ".join("@%s" % esc(name) for name in story["reference"]))
+    if story.get("sources", 0) > 1:
+        signals.append("\U0001F501 источников: %d" % story["sources"])
+    if signals:
+        lines.append(" · ".join(signals))
 
     meta = [esc(item.get("source") or "")]
     age = human_age(item.get("published"))
@@ -61,7 +117,7 @@ def item_card(item, verdict=None, breaking=False, reason=None):
         meta.append(age)
     extra = item.get("extra") or {}
     if extra.get("points"):
-        meta.append("\u2B06 %s" % extra["points"])
+        meta.append("⬆ %s" % extra["points"])
     lines.append("")
     lines.append("<i>%s</i>" % " · ".join(m for m in meta if m))
 
@@ -71,11 +127,6 @@ def item_card(item, verdict=None, breaking=False, reason=None):
     url = item.get("url") or ""
     if url and "news.google.com" not in url:
         lines.append(esc(url))
-
-    # An interruption should say why it was worth interrupting for.
-    if breaking and (verdict or {}).get("reason"):
-        lines.append("")
-        lines.append("<i>почему: %s</i>" % esc(verdict["reason"]))
 
     text = "\n".join(lines)
     return text[:4000]
@@ -119,17 +170,20 @@ def status_text(store, cfg, chat_id=None, fast=None):
         "в очереди: %s | отправлено: %s | пропущено: %s" % (
             counts.get("pending", 0), counts.get("sent", 0),
             counts.get("expired", 0) + counts.get("dropped", 0)
-            + counts.get("stale", 0) + counts.get("duplicate", 0)),
-        "устарело: %s | дублей: %s" % (
-            counts.get("stale", 0), counts.get("duplicate", 0)),
+            + counts.get("stale", 0) + counts.get("duplicate", 0)
+            + counts.get("rejected", 0)),
+        "не формат: %s | устарело: %s | повторов: %s" % (
+            counts.get("rejected", 0), counts.get("stale", 0), counts.get("duplicate", 0)),
         "оценок: 👍 %s / 👎 %s" % (feedback.get("good", 0), feedback.get("bad", 0)),
         "",
-        "лента: %s/час, пауза %s мин, порог %s" % (
-            cfg.get("max_per_hour"), cfg.get("min_gap_minutes"), cfg.get("min_score")),
-        "важное: до %s/час, пауза %s мин, от %s баллов или %s источников" % (
-            cfg.get("breaking_max_per_hour"), cfg.get("breaking_min_gap_minutes"),
-            cfg.get("breaking_score"), cfg.get("breaking_min_groups")),
-        "свежесть: не старше %s ч" % cfg.get("max_age_hours"),
+        "лента: до %s/день и %s/час, пауза %s мин, порог fit %s" % (
+            cfg.get("max_per_day"), cfg.get("max_per_hour"), cfg.get("min_gap_minutes"),
+            cfg.get("min_score")),
+        "срочное: до %s/день, от %s баллов (или от %s с подтверждением)" % (
+            cfg.get("breaking_max_per_day"), cfg.get("breaking_score"),
+            cfg.get("breaking_corroborated_score")),
+        "свежесть: не старше %s ч, повторы ловлю за %s ч" % (
+            cfg.get("max_age_hours"), cfg.get("dedup_window_hours")),
     ]
     if fast is not None:
         lines.append("опрос: %s источников каждые %s с, остальные каждые %s с" % (
@@ -154,10 +208,12 @@ def sources_text(store, sources):
         lines.append("<b>%s</b>" % esc(group))
         for source in by_group[group]:
             state = store.source_state(source["name"]) or {}
-            mark = "\u2705" if state.get("last_ok") else "\u23F3"
+            mark = "✅" if state.get("last_ok") else "⏳"
             if state.get("fail_count", 0) >= 3:
-                mark = "\u26A0\uFE0F"
+                mark = "⚠️"
             line = "%s %s" % (mark, esc(source["name"]))
+            if source.get("role") == "reference":
+                line += " — <i>ориентир, только сигнал</i>"
             # A warning without a reason is useless, so show the short cause.
             if state.get("fail_count", 0) and state.get("last_error"):
                 line += " — <i>%s</i>" % esc(short_reason(state["last_error"]))

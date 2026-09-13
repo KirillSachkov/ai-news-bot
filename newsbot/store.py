@@ -665,6 +665,29 @@ class Store:
             "first_seen": head["first_seen"] if head else None,
         }
 
+    def story_carriers(self, story_id):
+        """(source, group) pairs carrying a story."""
+        if not story_id:
+            return []
+        rows = self.db.execute(
+            "SELECT DISTINCT source, grp FROM story_items WHERE story_id=?",
+            (story_id,)).fetchall()
+        return [(r["source"], r["grp"]) for r in rows]
+
+    def sent_since(self, hours, limit=60):
+        """Items delivered in the last `hours`, newest first."""
+        cutoff = (datetime.now(timezone.utc)
+                  - timedelta(hours=hours)).isoformat(timespec="seconds")
+        rows = self.db.execute(
+            "SELECT nid, title, summary, source, story_id, sent_at FROM items "
+            "WHERE status='sent' AND sent_at >= ? ORDER BY sent_at DESC LIMIT ?",
+            (cutoff, limit)).fetchall()
+        return [dict(r) for r in rows]
+
+    def last_send_id(self):
+        row = self.db.execute("SELECT MAX(id) m FROM sends").fetchone()
+        return (row["m"] if row else 0) or 0
+
     def prune_stories(self, keep_hours=72):
         cutoff = (datetime.now(timezone.utc)
                   - timedelta(hours=keep_hours)).isoformat(timespec="seconds")

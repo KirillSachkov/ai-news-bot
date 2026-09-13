@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import html
 import re
+import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -373,10 +374,63 @@ def telegram_web(channel, limit=20):
 
 
 # --------------------------------------------------------------------------- #
+# GitHub: new repositories gaining stars fast (official search API, no key)
+# --------------------------------------------------------------------------- #
+
+def github_rising(days=7, min_stars=150, limit=20):
+    """Repositories created in the last `days`, most starred first.
+
+    "A useful free tool you can take today" is the most frequent rubric of the
+    reference channels, and github.com is the domain @codecamp links most (64
+    of 361 posts), yet no other source brings such finds. A young repository
+    climbing into this list is that kind of news, so the moment it first
+    appears here is used as its publication time; the creation date travels in
+    the summary for the editor.
+    """
+    since = datetime.fromtimestamp(time.time() - days * 86400, tz=timezone.utc)
+    url = ("https://api.github.com/search/repositories?q=created:>%s+stars:>=%d"
+           "&sort=stars&order=desc&per_page=%d"
+           % (since.strftime("%Y-%m-%d"), int(min_stars), int(limit)))
+    data, error = fetch_json(url)
+    if error:
+        return [], error
+    if not isinstance(data, dict):
+        return [], "unexpected payload"
+    items = []
+    for repo in data.get("items") or []:
+        name = repo.get("full_name") or ""
+        if not name or repo.get("fork") or repo.get("archived"):
+            continue
+        description = strip_html(repo.get("description") or "")
+        stars = repo.get("stargazers_count") or 0
+        title = "%s: %s" % (name, description) if description else name
+        if len(title) > 140:
+            title = title[:137].rstrip() + "..."
+        topics = ", ".join((repo.get("topics") or [])[:8])
+        summary = ("New GitHub repository, created %s, %s stars. Language: %s.%s %s"
+                   % ((repo.get("created_at") or "")[:10], stars,
+                      repo.get("language") or "n/a",
+                      (" Topics: %s." % topics) if topics else "", description)).strip()
+        items.append({
+            "uid": "gh-repo:%s" % name.lower(),
+            "title": title,
+            "url": repo.get("html_url") or "https://github.com/%s" % name,
+            "summary": summary[:600],
+            "published": now_iso(),
+            "extra": {"points": stars, "created_at": repo.get("created_at"),
+                      "language": repo.get("language")},
+        })
+    return items, None
+
+
+# --------------------------------------------------------------------------- #
 # registry
 # --------------------------------------------------------------------------- #
 
 ADAPTERS = {
+    "github_rising": lambda source: github_rising(source.get("days", 7),
+                                                  source.get("min_stars", 150),
+                                                  source.get("limit", 20)),
     "rss": lambda source: rss(source["url"], source.get("limit")),
     "hn_front_page": lambda source: hn_front_page(source.get("limit", 25)),
     "hn_show": lambda source: hn_show(source.get("limit", 20)),

@@ -85,8 +85,23 @@ def build(args, need_telegram=False):
             tg = Telegram(token)
         elif need_telegram:
             raise SystemExit("TELEGRAM_BOT_TOKEN is not set (see .env)")
-    llm = DeepSeek(store=store, profile=(cfg.get("interests") or {}).get("profile"))
+    llm = DeepSeek(store=store, profile=load_editorial(cfg))
     return sources, cfg, store, tg, llm
+
+
+def load_editorial(cfg):
+    """The editorial profile the judge works from (editorial.md by default).
+
+    Falls back to the old free-text interest profile in config.json, so an
+    install without the file still gets a direction rather than none.
+    """
+    path = cfg.get("editorial_path") or "editorial.md"
+    if not os.path.isabs(path):
+        path = os.path.join(HERE, path)
+    if os.path.isfile(path):
+        with open(path, "r", encoding="utf-8") as handle:
+            return handle.read()
+    return (cfg.get("interests") or {}).get("profile")
 
 
 # --------------------------------------------------------------------------- #
@@ -165,29 +180,34 @@ def cmd_once(args):
         rank["scanned"], rank["judged"], rank["llm_calls"]))
 
     if args.dry_run:
+        references = pipeline.reference_channels(sources)
         pending = store.pending(limit=200)
-        pending.sort(key=lambda r: pipeline.effective_score(r, store, cfg), reverse=True)
+        pending.sort(key=lambda r: pipeline.effective_score(r, store, cfg, references=references),
+                     reverse=True)
         print("\n=== top %d candidates (nothing sent) ===" % args.top)
         for row in pending[:args.top]:
             verdict = pipeline.get_verdict(store, row["nid"])
-            value = pipeline.effective_score(row, store, cfg)
-            stats = store.story_stats(row.get("story_id"))
+            story = pipeline.story_view(store, row.get("story_id"), references)
+            value = pipeline.effective_score(row, store, cfg, stats=story, verdict=verdict)
             base = pipeline.base_score(row, store, cfg, verdict=verdict)
             breaking = pipeline.is_breaking_now(
-                value, base, row, cfg, {}, stats,
+                value, base, row, cfg, {}, story,
                 pipeline.item_age_hours(row), verdict)
             mark = "BREAK" if breaking else "     "
             print("\n%s %.2f  [%s] %s" % (mark, value, row["source"], row["title"][:88]))
             if verdict:
-                print("        llm: %s (%s) %s" % (verdict.get("score"),
-                                                    verdict.get("category"),
-                                                    verdict.get("reason", "")[:60]))
+                outdated = " (old profile)" if llm.enabled and pipeline.needs_judgement(verdict, llm) else ""
+                print("        fit: %s %s / %s%s — %s" % (
+                    verdict.get("score"), verdict.get("rubric") or verdict.get("category"),
+                    verdict.get("channel") or "-", outdated, (verdict.get("reason") or "")[:70]))
                 if verdict.get("summary_ru"):
-                    print("        ru: %s" % verdict["summary_ru"][:150])
+                    print("        draft: %s" % verdict["summary_ru"][:150])
+            if story.get("reference"):
+                print("        already in: %s" % ", ".join("@" + c for c in story["reference"]))
             print("        %s" % (row.get("url") or ""))
         print("\n(candidates above)")
         print("\n=== would be sent RIGHT NOW (budget + dedupe applied, nothing marked) ===")
-        selection = pipeline.select_due(store, sources, cfg, force=True, dry=True)
+        selection = pipeline.select_due(store, sources, cfg, force=True, dry=True, llm=llm)
         if not selection:
             print("  (nothing above the threshold right now)")
         for value, breaking, row in selection:
@@ -197,10 +217,11 @@ def cmd_once(args):
 
     store.expire_pending(float(cfg.get("queue_ttl_hours", 8)))
     if pipeline.bootstrap(store, tg, store.kv_get("chat_id"), sources, stats, cfg,
-                          verbose=True):
+                          verbose=True, llm=llm):
         return 0
-    chosen = pipeline.select_due(store, sources, cfg)
-    sent = pipeline.deliver(tg, store, store.kv_get("chat_id"), chosen, cfg, verbose=True)
+    chosen = pipeline.select_due(store, sources, cfg, llm=llm)
+    sent = pipeline.deliver(tg, store, store.kv_get("chat_id"), chosen, cfg, verbose=True,
+                            sources=sources)
     print("delivered=%d" % sent)
     return 0
 
@@ -270,6 +291,22 @@ def cmd_explain(args):
             "published": None, "extra": {}}
     source_cfg = next((s for s in sources if s["name"] == args.source), {"weight": 1.0})
     print(scoring.explain(item, source_cfg, {}, cfg=cfg))
+    return 0
+
+
+def cmd_judge(args):
+    """Ask the editor about one headline, exactly as the pipeline would."""
+    import re
+
+    _, _, _, _, llm = build(args)
+    if not llm.enabled:
+        print("DEEPSEEK_API_KEY is not set — add it to .env")
+        return 2
+    item = {"uid": "cli:%s" % args.title, "title": args.title, "summary": args.summary or "",
+            "source": args.source, "url": args.url or "", "published": None, "extra": {}}
+    verdict = llm.judge(item, group=args.group, use_cache=False)
+    print(json.dumps(verdict, ensure_ascii=False, indent=2))
+    print("\n" + re.sub(r"</?[bi]>", "", render.item_card(item, verdict=verdict)))
     return 0
 
 
@@ -406,6 +443,14 @@ def main(argv=None):
     p.add_argument("--summary", default="")
     p.add_argument("--source", default="techcrunch_ai")
     p.set_defaults(func=cmd_explain)
+
+    p = sub.add_parser("judge", help="ask the editor about a headline")
+    p.add_argument("title")
+    p.add_argument("--summary", default="")
+    p.add_argument("--source", default="techcrunch_ai")
+    p.add_argument("--group", default="media")
+    p.add_argument("--url", default="")
+    p.set_defaults(func=cmd_judge)
 
     p = sub.add_parser("xdiag", help="probe X discovery routes")
     p.add_argument("--handle", default="OpenAI")

@@ -149,11 +149,12 @@ class Runner:
             return 0
         if self.is_paused() and not force:
             return 0
-        chosen = pipeline.select_due(self.store, self.sources, self.cfg, force=force)
+        chosen = pipeline.select_due(self.store, self.sources, self.cfg, force=force,
+                                     llm=self.llm)
         if not chosen:
             return 0
         sent = pipeline.deliver(self.tg, self.store, self.chat_id, chosen, self.cfg,
-                                verbose=self.verbose)
+                                verbose=self.verbose, sources=self.sources)
         if sent:
             breaking = len([c for c in chosen if c[1]])
             self.log("delivered %d item(s)%s"
@@ -196,7 +197,7 @@ class Runner:
                 pipeline.bootstrap(
                     self.store, self.tg, chat_id, self.sources,
                     {"sources": len(self.sources), "ok": 0, "fetched": 0},
-                    self.cfg, verbose=self.verbose)
+                    self.cfg, verbose=self.verbose, llm=self.llm)
                 self.next_fetch = 0.0
 
         command = text.split()[0].split("@")[0].lower() if text else ""
@@ -349,11 +350,18 @@ class Runner:
         self.start_worker()
         if stats and self.chat_id:
             pipeline.bootstrap(self.store, self.tg, self.chat_id, self.sources,
-                               stats, self.cfg, verbose=self.verbose)
+                               stats, self.cfg, verbose=self.verbose, llm=self.llm)
         try:
             while True:
+                # Separate guards: a card that fails to render or send must not
+                # also make the bot deaf to /pause and the rating buttons.
                 try:
                     self.maybe_deliver()
+                except KeyboardInterrupt:
+                    raise
+                except Exception:
+                    self.log("delivery error:\n%s" % traceback.format_exc())
+                try:
                     self.poll_updates()
                 except KeyboardInterrupt:
                     raise

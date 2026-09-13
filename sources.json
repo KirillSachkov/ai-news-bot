@@ -284,19 +284,23 @@
       "name": "tg_codecamp",
       "type": "telegram_web",
       "group": "telegram",
+      "role": "reference",
       "weight": 1.3,
       "channel": "codecamp",
       "limit": 15,
-      "tier": "fast"
+      "tier": "fast",
+      "note": "канал-ориентир: посты не отправляются, а подтверждают сюжеты (reference_bonus)"
     },
     {
       "name": "tg_data_secrets",
       "type": "telegram_web",
       "group": "telegram",
+      "role": "reference",
       "weight": 1.3,
       "channel": "data_secrets",
       "limit": 15,
-      "tier": "fast"
+      "tier": "fast",
+      "note": "канал-ориентир: посты не отправляются, а подтверждают сюжеты (reference_bonus)"
     },
     {
       "name": "tg_ai_newz",
@@ -472,6 +476,16 @@
       "channel": "cryptoEssay",
       "limit": 15,
       "tier": "fast"
+    },
+    {
+      "name": "github_rising",
+      "type": "github_rising",
+      "group": "github",
+      "weight": 1.2,
+      "days": 7,
+      "min_stars": 150,
+      "limit": 20,
+      "note": "молодые репозитории, быстро набирающие звёзды: рубрика «Полезное», которую другие источники не приносят"
     }
   ]
 }

@@ -1,10 +1,15 @@
-"""LLM layer: DeepSeek V4 (flash) as the final judge and summarizer.
+"""LLM layer: DeepSeek V4 (flash) as the editor: judge, repeat check and draft.
 
 Architecture note: the model is deliberately NOT applied to every fetched item.
 The free heuristic scorer (score.py) first ranks everything and cuts it down to
 a small shortlist; only that shortlist reaches the model. On our volumes that
 keeps the API usage inside the free grant on a new account (5M tokens) and at
 cents per month afterwards.
+
+The model does not rate "importance" in the abstract. It is given the editorial
+profile (editorial.md: what the reference channels publish, what they never
+do, real posts as examples) and answers one question - would those channels
+take this item - plus writes the draft in their voice.
 
 The wire format is OpenAI-compatible, so the request is plain JSON over urllib
 and the tool keeps its zero-dependency property. Everything degrades gracefully:
@@ -13,6 +18,7 @@ with no API key the bot still works, using the heuristic score alone.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -24,22 +30,43 @@ from .http import fetch
 DEFAULT_BASE_URL = "https://api.deepseek.com"
 DEFAULT_MODEL = "deepseek-flash"
 
-SYSTEM_PROMPT = """Ты — редактор новостной ленты про технологии и искусственный интеллект.
-Тебе дают одну публикацию (заголовок, источник, текст-анонс, ссылку).
-Оцени её как новость для занятого читателя, который следит за ИИ и разработкой.
+RUBRICS = ("release", "tool", "breakthrough", "viral", "industry", "safety",
+           "outage", "hardware", "career", "other")
 
-Критерии значимости:
-- новые модели, релизы, открытые веса, бенчмарки, крупные апдейты продуктов;
-- прорывы, важные исследования, крупные деньги (раунды, покупки), регуляторика;
-- то, что меняет инструменты или подходы разработчика.
-Снижай оценку за: рекламу, вакансии, вебинары, мемы, пересказ старого,
-маркетинговый шум без фактов, узколокальные новости без значения.
-{profile}
-Верни СТРОГО json без пояснений вокруг:
-{"score": <0-10>, "verdict": "send"|"skip", "category": "<model|research|product|business|policy|tool|other>",
- "reason": "<одна короткая фраза почему>", "title_ru": "<заголовок по-русски, до 90 символов>",
- "summary_ru": "<2-3 предложения по-русски, только факты из текста, без выдумок>"}
-Если данных не хватает для утверждения — не додумывай, пиши то, что есть.
+# Used only when editorial.md is missing, so the judge still has a direction.
+DEFAULT_EDITORIAL = """Ориентир — русскоязычные Telegram-каналы про ИИ и разработку @codecamp и
+@data_secrets: релизы моделей, полезные бесплатные инструменты, прорывы, вирусные истории
+из мира разработки, крупные сделки, инциденты с ИИ-агентами. Не берут рекламу, анонсы
+мероприятий, корпоративные туториалы, патч-релизы, политику и войну."""
+
+SYSTEM_PROMPT = """Ты — шеф-редактор русскоязычного Telegram-канала про ИИ и разработку.
+Тебе приносят одну публикацию из источника. Реши, взяли бы её в ленту каналы-ориентиры,
+и если да — подготовь черновик поста в их стиле.
+
+{editorial}
+
+## Шкала score — редакционный fit, 0–10
+9–10 — сюжет дня: об этом напишут оба канала (фронтир-релиз, сделка на миллиарды, громкий прорыв или инцидент).
+7–8 — уверенно в ленту: полезная находка с понятной выгодой, заметный релиз, история, которую будут пересказывать.
+5–6 — проходной: взяли бы только в пустой день (рядовой апдейт, нишевый инструмент, исследование без вау).
+3–4 — не формат (см. «Что каналы не берут»).
+0–2 — мимо: реклама, политика и война, старьё, мусор.
+
+## Правила
+- Оценивай, будут ли об этом говорить айтишники, а не формальную важность события.
+- Имя крупной компании в заголовке ещё не новость: важно, что конкретно произошло.
+- Мало текста (голый заголовок, обрывок поста) — не повод занижать score: оцени само событие, если оно понятно из заголовка. Занижай, только если из текста нельзя понять, что произошло.
+- Не выдумывай факты, цифры, бенчмарки и цены: только то, что есть в тексте. Мало текста — пиши черновик коротко.
+- verdict = "send" только при score ≥ 7, иначе "skip".
+
+Верни СТРОГО JSON без пояснений вокруг:
+{"score": <0-10>, "verdict": "send"|"skip",
+ "rubric": "release|tool|breakthrough|viral|industry|safety|outage|hardware|career|other",
+ "channel": "codecamp|data_secrets|both|none",
+ "reason": "<одна фраза: почему зайдёт или почему не формат>",
+ "event": "<ключ события по-английски, 3–8 слов: кто + что + объект, например deepseek releases v4.1 flash>",
+ "title_ru": "<заголовок-хук в стиле канала, до 100 символов>",
+ "summary_ru": "<черновик поста в стиле канала: 2–4 предложения или «Главное:» с пунктами, без ссылок>"}
 """
 
 USER_TEMPLATE = """Источник: {source} ({group})
@@ -47,6 +74,22 @@ USER_TEMPLATE = """Источник: {source} ({group})
 Дата: {published}
 Текст: {summary}
 Ссылка: {url}
+"""
+
+SAME_STORY_PROMPT = """Ты проверяешь ленту новостей на повторы.
+Дана новость-кандидат и пронумерованный список новостей, уже отправленных читателю за последние дни.
+Повтор — это то же событие: тот же релиз, та же сделка, тот же инцидент, тот же проект — даже если заголовок другой, на другом языке или из другого издания. Реакции, мнения, мелкие подробности и пересказы того же события — тоже повтор.
+Не повтор: другое событие той же компании; продолжение с существенно новым фактом (слух стал официальным релизом, анонс стал доступным продуктом, расследование принесло новые крупные данные).
+Верни СТРОГО JSON: {"duplicate_of": <номер из списка или null>, "reason": "<коротко>"}"""
+
+SAME_STORY_TEMPLATE = """Кандидат:
+Заголовок: {title}
+Заголовок редактора: {title_ru}
+Событие: {event}
+Текст: {summary}
+
+Уже отправлено:
+{sent}
 """
 
 
@@ -60,7 +103,7 @@ def _now():
 
 class DeepSeek:
     def __init__(self, api_key=None, base_url=None, model=None, timeout=45,
-                 max_tokens=700, thinking=False, store=None, profile=None):
+                 max_tokens=900, thinking=False, store=None, profile=None):
         self.api_key = api_key or os.environ.get("DEEPSEEK_API_KEY") or ""
         self.base_url = (base_url or os.environ.get("DEEPSEEK_BASE_URL")
                          or DEFAULT_BASE_URL).rstrip("/")
@@ -124,6 +167,17 @@ class DeepSeek:
     def enabled(self):
         return bool(self.api_key)
 
+    @property
+    def profile_tag(self):
+        """Identity of the question the judge answers.
+
+        The prompt and the editorial profile together are the question, so both
+        are hashed: a verdict formed under an older profile carries a different
+        tag and the pipeline asks again instead of trusting it.
+        """
+        blob = ("%s\n%s" % (SYSTEM_PROMPT, self.profile)).encode("utf-8")
+        return hashlib.sha1(blob).hexdigest()[:8]
+
     def cached(self, uid):
         if self.store is None:
             return None
@@ -145,6 +199,12 @@ class DeepSeek:
             "ts=excluded.ts",
             (uid, json.dumps(verdict, ensure_ascii=False), _now().isoformat(),
              tokens_in, tokens_out))
+        self.store.db.commit()
+        self.record_usage(tokens_in, tokens_out)
+
+    def record_usage(self, tokens_in=0, tokens_out=0):
+        if self.store is None:
+            return
         day = _now().strftime("%Y-%m-%d")
         self.store.db.execute(
             """INSERT INTO llm_usage (day, calls, tokens_in, tokens_out)
@@ -230,32 +290,26 @@ class DeepSeek:
         raise LLMError(last_error or "unknown error")
 
     def system_prompt(self):
-        """The base rubric plus the reader's own interest profile.
+        """The editor's brief: scale and output format around the profile.
 
-        The heuristic filter can only match words; the model is what tells an
-        AI-lab release apart from a weapons story that merely mentions a model
-        by name. Both read the same profile from config.json so they cannot
-        drift apart.
+        The heuristic filter can only match words; the model is what tells a
+        release the audience will discuss apart from a corporate tutorial that
+        merely names the same lab. The profile lives in editorial.md so it can
+        be tuned without touching code.
         """
-        block = ""
-        if self.profile:
-            block = "\n\nЛичный профиль интересов этого читателя — он важнее общих критериев:\n" + self.profile
-        return SYSTEM_PROMPT.replace("{profile}", block)
+        return SYSTEM_PROMPT.replace("{editorial}", self.profile or DEFAULT_EDITORIAL)
 
     def judge(self, item, group=None, use_cache=True):
-        """Return the model verdict dict, or None if the LLM is unavailable."""
+        """Return the editorial verdict dict, or None if the LLM is unavailable."""
         if not self.enabled:
             return None
         self.resolve_model()
-        # The profile is part of the question, so it is part of the cache key:
-        # otherwise editing the profile would keep returning verdicts formed
-        # under the previous one.
-        import hashlib
-        tag = hashlib.sha1(self.profile.encode("utf-8")).hexdigest()[:8] if self.profile else "base"
+        tag = self.profile_tag
         uid = "%s|%s" % (tag, item.get("uid") or item.get("url") or item.get("title"))
         if use_cache:
             hit = self.cached(uid)
-            if hit is not None:
+            if isinstance(hit, dict):
+                hit = normalize_verdict(hit)
                 hit["cached"] = True
                 return hit
 
@@ -270,12 +324,77 @@ class DeepSeek:
             {"role": "user", "content": prompt},
         ])
         verdict = _loads_loose(content)
-        if verdict is None:
+        if not isinstance(verdict, dict):
             raise LLMError("model returned unparseable JSON: %r" % content[:160])
-        verdict["score"] = _clamp(verdict.get("score"), 0, 10)
+        verdict = normalize_verdict(verdict)
+        verdict["profile_tag"] = tag
         verdict["cached"] = False
         self.remember(uid, verdict, tokens_in, tokens_out)
         return verdict
+
+    def same_story(self, item, verdict, recent):
+        """Index into `recent` of the sent item this one retells, or None.
+
+        `recent` is newest first; up to 60 entries are shown to the model, the
+        whole repeat window of a budgeted feed (13 a day for four days is 52).
+        """
+        if not self.enabled or not recent:
+            return None
+        shown = recent[:60]
+        lines = []
+        for position, other in enumerate(shown, 1):
+            label = other.get("title_ru") or other.get("title") or ""
+            if other.get("title_ru") and other.get("title") and other["title"] != other["title_ru"]:
+                label = "%s (%s)" % (other["title_ru"], other["title"])
+            lines.append("%d. %s" % (position, label[:220]))
+        verdict = verdict or {}
+        prompt = SAME_STORY_TEMPLATE.format(
+            title=item.get("title") or "", title_ru=verdict.get("title_ru") or "",
+            event=verdict.get("event") or "", summary=(item.get("summary") or "")[:500],
+            sent="\n".join(lines))
+        content, tokens_in, tokens_out = self._chat([
+            {"role": "system", "content": SAME_STORY_PROMPT},
+            {"role": "user", "content": prompt},
+        ])
+        self.record_usage(tokens_in, tokens_out)
+        data = _loads_loose(content) or {}
+        try:
+            position = int(data.get("duplicate_of"))
+        except (TypeError, ValueError):
+            return None
+        if 1 <= position <= len(shown):
+            return position - 1
+        return None
+
+
+def normalize_verdict(verdict):
+    """Coerce a model answer into the shape the pipeline and the card rely on.
+
+    The prompt asks for strings, but a model may answer a bulleted draft with a
+    list or an event key with an object, and one such verdict must not be able
+    to crash selection for every item behind it.
+    """
+    verdict = dict(verdict)
+    verdict["score"] = _clamp(verdict.get("score"), 0, 10)
+    if not isinstance(verdict.get("rubric"), str) or verdict["rubric"] not in RUBRICS:
+        verdict["rubric"] = "other"
+    for key in ("reason", "event", "title_ru", "summary_ru", "channel"):
+        verdict[key] = _as_text(verdict.get(key))
+    if verdict.get("verdict") not in ("send", "skip"):
+        verdict["verdict"] = "send" if verdict["score"] >= 7 else "skip"
+    return verdict
+
+
+def _as_text(value):
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (list, tuple)):
+        return "\n".join(_as_text(part) for part in value if part is not None)
+    if isinstance(value, dict):
+        return "\n".join("%s: %s" % (key, _as_text(part)) for key, part in value.items())
+    return str(value)
 
 
 def _clamp(value, low, high):

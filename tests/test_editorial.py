@@ -373,6 +373,27 @@ class EditorTest(unittest.TestCase):
         self.assertIsInstance(verdict["event"], str)
         self.assertIn("Главное:", render.item_card({"title": "t"}, verdict=verdict))
 
+    def test_judge_is_told_today_and_how_to_treat_old_events(self):
+        # A rising repository is "found" today even when its story is days old:
+        # the first live card after launch was exactly that.
+        editor = DeepSeek(api_key="test", profile="x")
+        editor._resolved = "test-model"
+        seen = {}
+
+        def fake_chat(messages, json_mode=True):
+            seen["messages"] = messages
+            return ('{"score": 3, "verdict": "skip"}', 10, 5)
+
+        editor._chat = fake_chat
+        editor.judge({"uid": "gh-repo:openai/navierstokesandeuler",
+                      "title": "openai/NavierStokesAndEuler: Lean certificates",
+                      "summary": "New GitHub repository, created 2026-09-08, 1844 stars.",
+                      "published": iso(0)}, use_cache=False)
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        self.assertIn("Сегодня: %s" % today, seen["messages"][1]["content"])
+        self.assertIn("Найдено в источнике:", seen["messages"][1]["content"])
+        self.assertIn("больше двух суток назад", seen["messages"][0]["content"])
+
     def test_same_story_maps_the_answer_to_a_recent_index(self):
         editor = DeepSeek(api_key="test", profile="x")
         recent = [{"title": "A"}, {"title": "B"}, {"title": "C"}]

@@ -436,6 +436,37 @@ class GithubRisingTest(unittest.TestCase):
         self.assertEqual(items[0]["extra"]["points"], 1200)
         self.assertIn("Free screen recorder", items[0]["title"])
 
+    @staticmethod
+    def run_with(fake_fetch_json, token):
+        original = feeds.fetch_json
+        feeds.fetch_json = fake_fetch_json
+        try:
+            return feeds.github_rising(days=7, min_stars=100, limit=10, token=token)
+        finally:
+            feeds.fetch_json = original
+
+    def test_token_is_sent_only_when_configured(self):
+        seen = []
+
+        def fake_fetch_json(url, **kwargs):
+            seen.append(kwargs.get("extra_headers") or {})
+            return {"items": []}, None
+
+        self.run_with(fake_fetch_json, token="github_pat_test")
+        self.run_with(fake_fetch_json, token="")
+        self.assertEqual(seen[0].get("Authorization"), "Bearer github_pat_test")
+        self.assertNotIn("Authorization", seen[1])
+        self.assertEqual(seen[1].get("Accept"), "application/vnd.github+json")
+
+    def test_rate_limit_without_a_token_says_how_to_fix_it(self):
+        items, error = self.run_with(lambda url, **kwargs: (None, "HTTP 403"), token="")
+        self.assertEqual(items, [])
+        self.assertIn("GITHUB_TOKEN", error)
+        self.assertIn("GITHUB_TOKEN", render.short_reason(error))
+        _, error_with_token = self.run_with(lambda url, **kwargs: (None, "HTTP 403"),
+                                            token="github_pat_test")
+        self.assertEqual(error_with_token, "HTTP 403")
+
 
 if __name__ == "__main__":
     unittest.main()

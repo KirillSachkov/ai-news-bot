@@ -374,10 +374,10 @@ def telegram_web(channel, limit=20):
 
 
 # --------------------------------------------------------------------------- #
-# GitHub: new repositories gaining stars fast (official search API, no key)
+# GitHub: new repositories gaining stars fast (official search API)
 # --------------------------------------------------------------------------- #
 
-def github_rising(days=7, min_stars=150, limit=20):
+def github_rising(days=7, min_stars=150, limit=20, token=None):
     """Repositories created in the last `days`, most starred first.
 
     "A useful free tool you can take today" is the most frequent rubric of the
@@ -386,13 +386,28 @@ def github_rising(days=7, min_stars=150, limit=20):
     climbing into this list is that kind of news, so the moment it first
     appears here is used as its publication time; the creation date travels in
     the summary for the editor.
+
+    Anonymous search works from a laptop but not reliably from a server: from
+    the production host every stdlib request got 403 "rate limit exceeded"
+    while the published counters stood untouched. A token (GITHUB_TOKEN in
+    .env, fine-grained, no permissions needed) takes the requests out of the
+    anonymous pool. `token=""` means "no token" and skips the environment.
     """
+    import os
+
+    token = os.environ.get("GITHUB_TOKEN", "") if token is None else token
+    headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+    if token:
+        headers["Authorization"] = "Bearer %s" % token
     since = datetime.fromtimestamp(time.time() - days * 86400, tz=timezone.utc)
     url = ("https://api.github.com/search/repositories?q=created:>%s+stars:>=%d"
            "&sort=stars&order=desc&per_page=%d"
            % (since.strftime("%Y-%m-%d"), int(min_stars), int(limit)))
-    data, error = fetch_json(url)
+    data, error = fetch_json(url, extra_headers=headers)
     if error:
+        if error in ("HTTP 403", "HTTP 429") and not token:
+            return [], ("GitHub rate limit for this host's IP (%s); set GITHUB_TOKEN in .env"
+                        % error)
         return [], error
     if not isinstance(data, dict):
         return [], "unexpected payload"

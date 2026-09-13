@@ -329,9 +329,16 @@ tail -f state/newsbot.err                                  # лог
 `hf_trending_models`, `telegram_web`, `github_rising`, `x_user`, `x_miner`, `bsky_user`.
 
 `github_rising` — молодые репозитории с GitHub: созданы за последние `days` дней и
-набрали не меньше `min_stars` звёзд. Официальный поиск GitHub, без ключа. Закрывает
+набрали не меньше `min_stars` звёзд. Официальный поиск GitHub. Закрывает
 рубрику «Полезное»: github.com — самый частый домен в ссылках @codecamp (64 поста
 из 361), а другие источники бота такие находки не приносят.
+
+С ноутбука поиск работает без ключа, а с сервера GitHub режет анонимные запросы:
+каждый получает 403 «rate limit exceeded», хотя счётчики в `/rate_limit` нетронуты.
+Лечится ключом: положи в `.env` `GITHUB_TOKEN` — fine-grained токен без доступов
+(Settings → Developer settings → Fine-grained tokens, «Public repositories»
+read-only). Без ключа источник просто пустой, а `/sources` показывает «нужен
+GITHUB_TOKEN».
 
 `"role": "reference"` — канал-ориентир: его посты не отправляются, а только
 подтверждают сюжеты (см. раздел 4).

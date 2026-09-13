@@ -224,6 +224,8 @@ def sources_text(store, sources):
 def short_reason(error):
     """Compress a long multi-route error into one readable phrase."""
     text = (error or "").lower()
+    if "github rate limit" in text:
+        return "лимит GitHub для IP сервера — нужен GITHUB_TOKEN в .env"
     if "not whitelisted" in text:
         return "нужна вайтлиста xcancel (письмо rss@xcancel.com)"
     if "cooling down" in text and "403" not in text and "429" not in text:

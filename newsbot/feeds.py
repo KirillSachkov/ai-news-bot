@@ -377,6 +377,43 @@ def telegram_web(channel, limit=20):
 # GitHub: new repositories gaining stars fast (official search API)
 # --------------------------------------------------------------------------- #
 
+def _curl_json(url, headers, timeout=25):
+    """Fetch JSON through the curl binary. Returns (data, error).
+
+    Only for anonymous GitHub search: from the production host GitHub turns
+    away part of the stdlib requests with 403 "rate limit exceeded", while curl
+    from the same host, in the same minute and against the same counter, gets
+    200. Never called with a token, so nothing secret reaches argv, which
+    every user of the box can read through ps.
+    """
+    import json
+    import shutil
+    import subprocess
+
+    from .http import USER_AGENT
+
+    curl = shutil.which("curl")
+    if not curl:
+        return None, "curl not found"
+    command = [curl, "-sS", "--max-time", str(int(timeout)), "-A", USER_AGENT,
+               "-w", "\n%{http_code}"]
+    for key, value in headers.items():
+        command += ["-H", "%s: %s" % (key, value)]
+    command.append(url)
+    try:
+        done = subprocess.run(command, capture_output=True, text=True, timeout=timeout + 5)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return None, "curl failed: %s" % exc
+    body, _, status = done.stdout.rpartition("\n")
+    status = status.strip()
+    if done.returncode != 0 or status != "200":
+        return None, "curl HTTP %s" % (status or "exit %s" % done.returncode)
+    try:
+        return json.loads(body), None
+    except ValueError as exc:
+        return None, "invalid JSON from curl: %s" % exc
+
+
 def github_rising(days=7, min_stars=150, limit=20, token=None):
     """Repositories created in the last `days`, most starred first.
 
@@ -388,10 +425,12 @@ def github_rising(days=7, min_stars=150, limit=20, token=None):
     the summary for the editor.
 
     Anonymous search works from a laptop but not reliably from a server: from
-    the production host every stdlib request got 403 "rate limit exceeded"
-    while the published counters stood untouched. A token (GITHUB_TOKEN in
-    .env, fine-grained, no permissions needed) takes the requests out of the
-    anonymous pool. `token=""` means "no token" and skips the environment.
+    the production host GitHub refuses part of the stdlib requests with 403
+    "rate limit exceeded" while curl on the same host goes through. Without a
+    token such a refusal is retried once through curl (see _curl_json). With a
+    token (GITHUB_TOKEN in .env, fine-grained, no permissions needed) requests
+    are authenticated, leave the anonymous pool and never touch curl.
+    `token=""` means "no token" and skips the environment.
     """
     import os
 
@@ -404,10 +443,13 @@ def github_rising(days=7, min_stars=150, limit=20, token=None):
            "&sort=stars&order=desc&per_page=%d"
            % (since.strftime("%Y-%m-%d"), int(min_stars), int(limit)))
     data, error = fetch_json(url, extra_headers=headers)
+    if error in ("HTTP 403", "HTTP 429") and not token:
+        data, curl_error = _curl_json(url, headers)
+        if curl_error:
+            return [], ("GitHub rate limit for this host's IP (%s, %s); set GITHUB_TOKEN in .env"
+                        % (error, curl_error))
+        error = None
     if error:
-        if error in ("HTTP 403", "HTTP 429") and not token:
-            return [], ("GitHub rate limit for this host's IP (%s); set GITHUB_TOKEN in .env"
-                        % error)
         return [], error
     if not isinstance(data, dict):
         return [], "unexpected payload"

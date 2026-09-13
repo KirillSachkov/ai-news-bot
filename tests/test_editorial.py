@@ -437,13 +437,28 @@ class GithubRisingTest(unittest.TestCase):
         self.assertIn("Free screen recorder", items[0]["title"])
 
     @staticmethod
-    def run_with(fake_fetch_json, token):
-        original = feeds.fetch_json
+    def run_with(fake_fetch_json, token, fake_curl_json=None):
+        original, original_curl = feeds.fetch_json, feeds._curl_json
         feeds.fetch_json = fake_fetch_json
+        feeds._curl_json = fake_curl_json or (lambda url, headers, **kwargs: (None, "curl HTTP 403"))
         try:
             return feeds.github_rising(days=7, min_stars=100, limit=10, token=token)
         finally:
-            feeds.fetch_json = original
+            feeds.fetch_json, feeds._curl_json = original, original_curl
+
+    def test_refused_anonymous_search_is_retried_through_curl(self):
+        calls = []
+
+        def fake_curl_json(url, headers, **kwargs):
+            calls.append(headers)
+            return {"items": [{"full_name": "acme/tool", "html_url": "https://github.com/acme/tool",
+                               "stargazers_count": 500}]}, None
+
+        items, error = self.run_with(lambda url, **kwargs: (None, "HTTP 403"), token="",
+                                     fake_curl_json=fake_curl_json)
+        self.assertIsNone(error)
+        self.assertEqual([i["uid"] for i in items], ["gh-repo:acme/tool"])
+        self.assertNotIn("Authorization", calls[0])
 
     def test_token_is_sent_only_when_configured(self):
         seen = []
@@ -463,9 +478,17 @@ class GithubRisingTest(unittest.TestCase):
         self.assertEqual(items, [])
         self.assertIn("GITHUB_TOKEN", error)
         self.assertIn("GITHUB_TOKEN", render.short_reason(error))
+        curl_calls = []
+
+        def curl_must_not_run(url, headers, **kwargs):
+            curl_calls.append(headers)
+            return None, "curl HTTP 403"
+
         _, error_with_token = self.run_with(lambda url, **kwargs: (None, "HTTP 403"),
-                                            token="github_pat_test")
+                                            token="github_pat_test",
+                                            fake_curl_json=curl_must_not_run)
         self.assertEqual(error_with_token, "HTTP 403")
+        self.assertEqual(curl_calls, [], "a token must never be handed to curl")
 
 
 if __name__ == "__main__":

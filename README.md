@@ -333,12 +333,13 @@ tail -f state/newsbot.err                                  # лог
 рубрику «Полезное»: github.com — самый частый домен в ссылках @codecamp (64 поста
 из 361), а другие источники бота такие находки не приносят.
 
-С ноутбука поиск работает без ключа, а с сервера GitHub режет анонимные запросы:
-каждый получает 403 «rate limit exceeded», хотя счётчики в `/rate_limit` нетронуты.
-Лечится ключом: положи в `.env` `GITHUB_TOKEN` — fine-grained токен без доступов
-(Settings → Developer settings → Fine-grained tokens, «Public repositories»
-read-only). Без ключа источник просто пустой, а `/sources` показывает «нужен
-GITHUB_TOKEN».
+Ключ не обязателен. С сервера GitHub отклоняет часть анонимных запросов из Python
+(403 «rate limit exceeded», хотя счётчики в `/rate_limit` нетронуты), а `curl` с той
+же машины в ту же минуту проходит. Поэтому без ключа отказ повторяется через `curl`.
+Если не пройдёт и он, `/sources` покажет «нужен GITHUB_TOKEN» — тогда положи в `.env`
+fine-grained токен без доступов (Settings → Developer settings → Fine-grained tokens,
+«Public repositories» read-only). Запросы с ключом идут только через Python: в
+аргументы `curl` ключ не попадает.
 
 `"role": "reference"` — канал-ориентир: его посты не отправляются, а только
 подтверждают сюжеты (см. раздел 4).

@@ -15,6 +15,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import zlib
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 USER_AGENT = (
     "ai-news-bot/1.0 (personal news digest; stdlib urllib; "
@@ -22,6 +24,56 @@ USER_AGENT = (
 )
 DEFAULT_TIMEOUT = 25
 RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+_DEADLINE = ContextVar("http_deadline", default=None)
+
+
+@contextmanager
+def request_budget(seconds):
+    """Bound cumulative HTTP attempts in this thread, including nested calls."""
+    deadline = time.monotonic() + float(seconds)
+    current = _DEADLINE.get()
+    token = _DEADLINE.set(min(current, deadline) if current else deadline)
+    try:
+        yield
+    finally:
+        _DEADLINE.reset(token)
+
+
+def remaining_timeout(timeout):
+    deadline = _DEADLINE.get()
+    if deadline is None:
+        return timeout
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError("HTTP request budget exhausted")
+    return min(timeout, remaining)
+
+
+def retry_sleep(seconds):
+    time.sleep(remaining_timeout(seconds))
+
+
+def read_body(response, timeout, limit=10*1024*1024):
+    """Recompute the socket timeout for each read, including trickling bodies."""
+    parts, size = [], 0
+    reader = getattr(response, "read1", response.read)
+    while True:
+        remaining = remaining_timeout(timeout)
+        stream = getattr(response, "fp", None)
+        # HTTPError wraps HTTPResponse, which in turn owns the buffered socket.
+        if stream is not None and not hasattr(stream, "raw"):
+            stream = getattr(stream, "fp", None)
+        raw = getattr(stream, "raw", None)
+        sock = getattr(raw, "_sock", None)
+        if sock is not None:
+            sock.settimeout(remaining)
+        chunk = reader(min(65536, limit-size+1))
+        if not chunk:
+            return b"".join(parts)
+        size += len(chunk)
+        if size > limit:
+            raise ValueError("HTTP body exceeds %s bytes" % limit)
+        parts.append(chunk)
 
 # Google News only serves the article page to something that looks like a
 # browser; the bot's own agent string gets a consent wall with no signature in
@@ -106,8 +158,8 @@ def fetch(url, etag=None, last_modified=None, timeout=DEFAULT_TIMEOUT, retries=2
     for attempt in range(retries + 1):
         request = urllib.request.Request(url, headers=headers)
         try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
-                raw = response.read()
+            with urllib.request.urlopen(request, timeout=remaining_timeout(timeout)) as response:
+                raw = read_body(response, timeout)
                 raw = _decompress(raw, response.headers.get("Content-Encoding"))
                 return FetchResult(response.status, raw, dict(response.headers))
         except urllib.error.HTTPError as exc:
@@ -122,13 +174,19 @@ def fetch(url, etag=None, last_modified=None, timeout=DEFAULT_TIMEOUT, retries=2
                         delay = min(float(retry_after), 30.0)
                     except ValueError:
                         delay = 2.0
-                time.sleep(delay * (attempt + 1))
+                try:
+                    retry_sleep(delay * (attempt + 1))
+                except TimeoutError:
+                    break
                 continue
             return FetchResult(exc.code, b"", dict(exc.headers or {}), last_error)
         except Exception as exc:  # URLError, timeout, ssl, connection reset...
             last_error = "%s: %s" % (type(exc).__name__, exc)
             if attempt < retries:
-                time.sleep(1.5 * (attempt + 1))
+                try:
+                    retry_sleep(1.5 * (attempt + 1))
+                except TimeoutError:
+                    break
                 continue
     return FetchResult(0, b"", {}, last_error or "unknown error")
 

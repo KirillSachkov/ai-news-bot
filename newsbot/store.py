@@ -110,6 +110,14 @@ CREATE TABLE IF NOT EXISTS story_items (
     PRIMARY KEY (story_id, nid)
 );
 CREATE INDEX IF NOT EXISTS idx_story_items_nid ON story_items(nid);
+
+CREATE TABLE IF NOT EXISTS observations (
+    uid TEXT NOT NULL, ts TEXT NOT NULL, points INTEGER NOT NULL,
+    PRIMARY KEY (uid, ts)
+);
+CREATE TABLE IF NOT EXISTS collection_runs (
+    id INTEGER PRIMARY KEY, started TEXT, finished TEXT, label TEXT, stats TEXT
+);
 """
 
 # Columns added after the first release; SQLite has no "ADD COLUMN IF NOT
@@ -120,6 +128,12 @@ MIGRATIONS = (
     "CREATE INDEX IF NOT EXISTS idx_items_curl ON items(curl)",
     "CREATE INDEX IF NOT EXISTS idx_items_story ON items(story_id)",
     "CREATE INDEX IF NOT EXISTS idx_items_published ON items(published)",
+    "ALTER TABLE sources ADD COLUMN last_check TEXT",
+    "ALTER TABLE sources ADD COLUMN newest TEXT",
+    "ALTER TABLE sources ADD COLUMN fetched INTEGER DEFAULT 0",
+    "ALTER TABLE sources ADD COLUMN new_items INTEGER DEFAULT 0",
+    "ALTER TABLE sources ADD COLUMN seconds REAL DEFAULT 0",
+    "ALTER TABLE sources ADD COLUMN retry_at TEXT",
 )
 
 _TRACKING_PARAMS = re.compile(
@@ -303,6 +317,64 @@ class Store:
         row = self.db.execute("SELECT 1 FROM items WHERE uid=?", (uid,)).fetchone()
         return row is not None
 
+    def observed_item(self, item, source, now=None):
+        """Persist sampled interest; first discovery is not evidence of growth."""
+        now = now or utc_now()
+        stamp = datetime.fromisoformat(now)
+        extra = dict(item.get("extra") or {})
+        previous = self.db.execute("SELECT * FROM items WHERE uid=?", (item["uid"],)).fetchone()
+        saved = decode_extra(dict(previous)) if previous else None
+        old_extra = (saved or {}).get("extra") or {}
+        if extra.get("discovery_kind") in ("project", "model"):
+            extra["freshness_at"] = old_extra.get("freshness_at") or (saved or {}).get("discovered") or now
+            extra["freshness_basis"] = old_extra.get("freshness_basis") or "discovery"
+        if source.get("freshness_hours"):
+            extra["max_age_hours"] = float(source["freshness_hours"])
+        kind = source.get("type")
+        if kind in ("hn_front_page", "hn_show", "hf_trending_models", "github_rising"):
+            points = max(0, int(extra.get("points") or 0))
+            cutoff = (stamp - timedelta(hours=24)).isoformat(timespec="seconds")
+            base = self.db.execute(
+                "SELECT * FROM observations WHERE uid=? AND ts>=? ORDER BY ts LIMIT 1",
+                (item["uid"], cutoff)).fetchone()
+            latest = self.db.execute(
+                "SELECT ts FROM observations WHERE uid=? ORDER BY ts DESC LIMIT 1",
+                (item["uid"],)).fetchone()
+            if not latest or (stamp-datetime.fromisoformat(latest["ts"])).total_seconds() >= 900:
+                self.db.execute("INSERT OR IGNORE INTO observations VALUES (?,?,?)",
+                                (item["uid"], now, points))
+            if base:
+                hours = (stamp-datetime.fromisoformat(base["ts"])).total_seconds()/3600
+                delta = points-base["points"]
+                minimum = int(source.get("growth_min_delta", 5 if kind == "hf_trending_models" else 10 if kind.startswith("hn_") else 20))
+                if hours >= 1 and delta >= minimum and delta >= max(1, base["points"])*0.2:
+                    extra.update(growth_delta=delta, growth_hours=round(hours, 2),
+                                 growth_per_hour=round(delta/hours, 2),
+                                 max_age_hours=max(float(extra.get("max_age_hours", 0)),
+                                                   float(source.get("growth_freshness_hours", 48))))
+                    # Refresh at most once per news window; never resurrect sent,
+                    # rejected or duplicate rows. A new event needs a new URL/UID.
+                    last = old_extra.get("freshness_at")
+                    signal_points = int(old_extra.get("growth_signal_points", base["points"]))
+                    additional = points-signal_points
+                    due = (not last or (stamp-datetime.fromisoformat(last)).total_seconds() >= 6*3600) and additional >= minimum
+                    if due:
+                        extra.update(freshness_at=now, freshness_basis="interest_growth", growth_signal_points=points)
+                        if saved and saved["status"] in ("expired", "stale"):
+                            self.db.execute("UPDATE items SET status='pending' WHERE nid=?",
+                                            (saved["nid"],))
+            if not extra.get("freshness_at") and old_extra.get("freshness_at"):
+                for key in ("freshness_at", "freshness_basis", "growth_delta", "growth_hours", "growth_per_hour"):
+                    if key in old_extra and key not in extra:
+                        extra[key] = old_extra[key]
+        item["extra"] = extra
+        if saved:
+            # Keep links mined from Telegram and all other stored adapter hints.
+            self.db.execute("UPDATE items SET extra=? WHERE nid=?",
+                            (json.dumps(dict(old_extra, **extra), ensure_ascii=False), saved["nid"]))
+        self.db.commit()
+        return item
+
     def exists_url(self, url):
         """True when this article is already stored, ignoring tracking junk."""
         canonical = canonical_url(url)
@@ -323,7 +395,7 @@ class Store:
         """
         if order == "fresh":
             sql = ("SELECT * FROM items WHERE status='pending' "
-                   "ORDER BY discovered DESC LIMIT ?")
+                   "ORDER BY COALESCE(json_extract(extra, '$.freshness_at'),discovered) DESC LIMIT ?")
         else:
             sql = ("SELECT * FROM items WHERE status='pending' "
                    "ORDER BY score DESC, discovered DESC LIMIT ?")
@@ -358,14 +430,36 @@ class Store:
         self.db.commit()
 
     def expire_pending(self, ttl_hours):
-        cutoff = datetime.fromtimestamp(
-            time.time() - ttl_hours * 3600, tz=timezone.utc
-        ).isoformat(timespec="seconds")
         self.db.execute(
-            "UPDATE items SET status='expired' WHERE status='pending' AND discovered < ?",
-            (cutoff,),
+            "UPDATE items SET status='expired' WHERE status='pending' AND "
+            "julianday(COALESCE(json_extract(extra, '$.freshness_at'),discovered)) < julianday('now') - "
+            "MAX(?,COALESCE(json_extract(extra, '$.max_age_hours'),?))/24.0",
+            (ttl_hours, ttl_hours),
         )
         self.db.commit()
+
+    def record_source_probe(self, name, newest, fetched, new_items, seconds, error=None):
+        state = self.source_state(name) or {}
+        retry_at = None
+        if error:
+            delay = min(3600, 60 * 2 ** min(6, max(0, state.get("fail_count", 1)-1)))
+            retry_at = (datetime.now(timezone.utc)+timedelta(seconds=delay)).isoformat(timespec="seconds")
+        self.db.execute("UPDATE sources SET last_check=?,newest=COALESCE(?,newest), "
+                        "fetched=?,new_items=?,seconds=?,retry_at=? WHERE name=?",
+                        (utc_now(), newest or None, fetched, new_items, round(seconds, 3), retry_at, name))
+        self.db.commit()
+
+    def record_collection(self, started, label, stats):
+        self.db.execute("INSERT INTO collection_runs (started,finished,label,stats) VALUES (?,?,?,?)",
+                        (started, utc_now(), label, json.dumps(stats, ensure_ascii=False)))
+        cutoff = (datetime.now(timezone.utc)-timedelta(days=14)).isoformat(timespec="seconds")
+        self.db.execute("DELETE FROM collection_runs WHERE finished<?", (cutoff,))
+        self.db.execute("DELETE FROM observations WHERE ts<?", (cutoff,))
+        self.db.commit()
+
+    def last_collection(self):
+        row = self.db.execute("SELECT * FROM collection_runs ORDER BY id DESC LIMIT 1").fetchone()
+        return dict(row) if row else None
 
     def backfill_links(self, uid, links):
         """Attach outbound links to an item stored before links were persisted.
@@ -543,7 +637,7 @@ class Store:
                 (route, utc_now(), str(status or "ok")))
         else:
             blocked_until = None
-            if status in (403, 429, 0, 502, 503):
+            if status in (403, 429, 451, 0, 502, 503, "parse", "whitelist"):
                 blocked_until = (
                     datetime.now(timezone.utc)
                     + timedelta(minutes=cooldown_minutes)

@@ -25,7 +25,7 @@ import re
 import time
 from datetime import datetime, timedelta, timezone
 
-from . import feeds, render, score as scoring, x_sources
+from . import feeds, render, score as scoring, x_sources, http
 from .store import _COMMON_ENTITIES, canonical_url, entity_tokens, title_key, utc_now  # noqa: F401
 
 REFERENCE_ROLE = "reference"
@@ -48,6 +48,9 @@ def ensure_verdict_table(store):
     store.db.execute(
         "CREATE TABLE IF NOT EXISTS judge_failures (nid INTEGER PRIMARY KEY, "
         "failures INTEGER, last_error TEXT, ts TEXT)")
+    store.db.execute(
+        "CREATE TABLE IF NOT EXISTS repeat_failures (nid INTEGER PRIMARY KEY, "
+        "last_send_id INTEGER, failures INTEGER, last_error TEXT, ts TEXT)")
     store.db.commit()
     store._editor_tables = True
 
@@ -87,7 +90,7 @@ def is_item_fault(error):
     text = str(error)
     if text.startswith("model returned"):
         return True
-    return text.startswith("HTTP 4") and not text.startswith("HTTP 429")
+    return text.startswith("HTTP 400")
 
 
 def judge_failures(store):
@@ -293,7 +296,12 @@ def check_repeats(store, sources, cfg, llm, limit=None):
     min_score = float(cfg.get("min_score", 7.0))
 
     candidates = []
+    attempts = {r["nid"]: dict(r) for r in store.db.execute(
+        "SELECT nid,failures,ts FROM repeat_failures WHERE last_send_id=?", (last_id,))}
+    max_failures = int(cfg.get("llm_item_max_failures", 2))
     for row in store.pending(limit=int(cfg.get("pending_scan_limit", 300))):
+        if attempts.get(row["nid"], {}).get("failures", 0) >= max_failures:
+            continue
         if row["source"] in references or too_old_to_send(row, cfg):
             continue
         verdict = get_verdict(store, row["nid"])
@@ -305,24 +313,43 @@ def check_repeats(store, sources, cfg, llm, limit=None):
         value = effective_score(row, store, cfg, stats=stats, verdict=verdict)
         if value >= min_score and not matches_recent(row, verdict, recent):
             candidates.append((value, row, verdict))
-    candidates.sort(key=lambda entry: entry[0], reverse=True)
+    # Try unseen candidates first, then the oldest failed attempt. Network
+    # failures stay unknown without monopolizing every subsequent cycle.
+    candidates.sort(key=lambda entry: (
+        attempts.get(entry[1]["nid"], {}).get("ts", ""), -entry[0]))
 
     calls = 0
+    started = time.monotonic()
     for value, row, verdict in candidates:
+        remaining = float(cfg.get("llm_cycle_budget_seconds", 35)) - (time.monotonic()-started)
+        if remaining <= 0:
+            break
         other = None
         if recent:
             if calls >= limit:
                 break
             calls += 1
             try:
-                index = llm.same_story(row, verdict, recent)
-            except Exception:
-                # A failed check must not hold the feed hostage; the story
-                # clusters and the cheap check have already run.
-                index = None
+                with http.request_budget(remaining):
+                    index = llm.same_story(row, verdict, recent)
+            except Exception as exc:
+                # A failed response is not a verified clear answer. Retry on
+                # the next cycle; never store a false negative for this feed.
+                increment = 1 if is_item_fault(exc) else 0
+                store.db.execute(
+                        "INSERT INTO repeat_failures VALUES (?,?,?,?,?) "
+                        "ON CONFLICT(nid) DO UPDATE SET last_send_id=excluded.last_send_id, "
+                        "failures=CASE WHEN repeat_failures.last_send_id=excluded.last_send_id "
+                        "THEN repeat_failures.failures+excluded.failures ELSE excluded.failures END, "
+                        "last_error=excluded.last_error,ts=excluded.ts",
+                        (row["nid"], last_id, increment, str(exc)[:300], utc_now()))
+                store.db.commit()
+                continue
             if index is not None and 0 <= index < len(recent):
                 other = recent[index]
         save_repeat_state(store, row["nid"], last_id, other["nid"] if other else None)
+        store.db.execute("DELETE FROM repeat_failures WHERE nid=?", (row["nid"],))
+        store.db.commit()
     return calls
 
 
@@ -343,10 +370,21 @@ def item_age_hours(item):
 def is_fresh_enough(item, cfg):
     """Collection gate. Undated items are admitted but never treated as fresh."""
     hours = float(cfg.get("lookback_hours", 8))
-    age = item_age_hours(item)
+    age = freshness_age(item)
+    hours = max(hours, freshness_limit(item, cfg))
     if age is None:
         return True
-    return age <= hours
+    return -float(cfg.get("future_tolerance_minutes", 15))/60 <= age <= hours
+
+
+def freshness_age(item):
+    extra = item.get("extra") or {}
+    stamp = extra.get("freshness_at")
+    return item_age_hours({"published": stamp}) if stamp else item_age_hours(item)
+
+
+def freshness_limit(item, cfg):
+    return float((item.get("extra") or {}).get("max_age_hours") or cfg.get("max_age_hours", 6))
 
 
 def too_old_to_send(item, cfg):
@@ -356,15 +394,19 @@ def too_old_to_send(item, cfg):
     behind the hourly budget long enough to go stale after it was collected, and
     nothing downstream used to notice.
     """
-    age = item_age_hours(item)
+    age = freshness_age(item)
     if age is None:
         return False
-    return age > float(cfg.get("max_age_hours", 6))
+    return age > freshness_limit(item, cfg) or age < -float(cfg.get("future_tolerance_minutes", 15))/60
 
 
 def fetch_source(source, etag=None, last_modified=None):
     """Fetch one source. Returns (items, error, validators)."""
     kind = source.get("type")
+    if kind == "x_html":
+        from . import x_html
+        items, error = x_html.collect(source)
+        return items, error, {}
     if kind == "x_user":
         items, error = x_sources.x_user(source, limit=int(source.get("limit", 15)))
         return items, error, {}
@@ -382,7 +424,8 @@ def fetch_source(source, etag=None, last_modified=None):
 def collect(store, sources, cfg, verbose=False):
     """Fetch every enabled source and store new items. Returns stats."""
     stats = {"sources": 0, "ok": 0, "failed": 0, "fetched": 0, "new": 0,
-             "errors": {}, "skipped_unchanged": 0}
+             "errors": {}, "skipped_unchanged": 0, "cooldown": 0,
+             "old": 0, "seen": 0, "undated": 0}
     x_sources.set_store(store)
     for source in sources:
         if not source.get("enabled", True):
@@ -390,13 +433,22 @@ def collect(store, sources, cfg, verbose=False):
         name = source["name"]
         stats["sources"] += 1
         state = store.source_state(name) or {}
-        items, error, validators = fetch_source(
-            source, etag=state.get("etag"), last_modified=state.get("last_modified"))
+        if state.get("retry_at") and state["retry_at"] > utc_now():
+            stats["cooldown"] += 1
+            continue
+        started = time.monotonic()
+        try:
+            with http.request_budget(float(cfg.get("source_time_budget_seconds", 45))):
+                items, error, validators = fetch_source(
+                    source, etag=state.get("etag"), last_modified=state.get("last_modified"))
+        except Exception as exc:
+            items, error, validators = [], "%s: %s" % (type(exc).__name__, exc), {}
         if validators.get("not_modified"):
             # The server says nothing changed; stop here instead of re-parsing.
             stats["ok"] += 1
             stats["skipped_unchanged"] += 1
             store.touch_source_ok(name, source.get("group"))
+            store.record_source_probe(name, None, 0, 0, time.monotonic()-started)
             if verbose:
                 print("  [=] %-21s unchanged (304)" % name)
             time.sleep(float(cfg.get("politeness_delay_seconds", 0.4)))
@@ -405,6 +457,7 @@ def collect(store, sources, cfg, verbose=False):
             stats["failed"] += 1
             stats["errors"][name] = error
             store.touch_source_error(name, error, source.get("group"))
+            store.record_source_probe(name, None, 0, 0, time.monotonic()-started, error)
             if verbose:
                 print("  [!] %-22s %s" % (name, error))
             continue
@@ -416,11 +469,16 @@ def collect(store, sources, cfg, verbose=False):
         stats["fetched"] += len(items)
         fresh = 0
         for item in items:
+            store.observed_item(item, source)
             if not is_fresh_enough(item, cfg):
+                stats["old"] += 1
                 continue
+            if item_age_hours(item) is None:
+                stats["undated"] += 1
             item["source"] = name
             item["source_group"] = source.get("group")
             if store.exists(item["uid"]) or store.exists_url(item.get("url")):
+                stats["seen"] += 1
                 store.backfill_links(item["uid"], (item.get("extra") or {}).get("links"))
                 continue
             nid = store.add_item(item)
@@ -440,10 +498,12 @@ def collect(store, sources, cfg, verbose=False):
                         print("  [!] story grouping failed nid=%s: %s" % (nid, exc))
                 if source.get("role") == REFERENCE_ROLE:
                     store.mark(nid, "signal")
+        store.record_source_probe(name, max((i.get("published") or "" for i in items), default=""),
+                                  len(items), fresh, time.monotonic()-started)
         if verbose:
             print("  [ok] %-21s %3d items (%d new)" % (name, len(items), fresh))
         delay = float(cfg.get("politeness_delay_seconds", 0.4))
-        if source.get("type") in ("x_user", "x_miner", "bsky_user"):
+        if source.get("type") in ("x_user", "x_miner"):
             # The free X mirrors block by IP, and they are shared resources:
             # space the calls out instead of firing them in a burst.
             delay = float(cfg.get("x_politeness_delay_seconds", 5.0))
@@ -481,9 +541,15 @@ def rerank_pending(store, sources, cfg, llm=None, verbose=False, fast=False):
     llm_used = 0
     judged = 0
     llm_errors = 0
+    started = time.monotonic()
+    cycle_budget = float(cfg.get("llm_cycle_budget_seconds", 35))
+    judge_budget = cycle_budget-min(10, cycle_budget/3)
 
     scored = []
     for row in pending:
+        if too_old_to_send(row, cfg):
+            store.mark(row["nid"], "stale")
+            continue
         if row["source"] in references:
             # Collected before the source became a reference channel.
             store.mark(row["nid"], "signal")
@@ -496,6 +562,18 @@ def rerank_pending(store, sources, cfg, llm=None, verbose=False, fast=False):
         row["_keywords"] = keywords
         scored.append(row)
     scored.sort(key=lambda r: r["score"], reverse=True)
+    failures = judge_failures(store)
+    # A bounded share of the existing allowance protects new practical work
+    # from headline keyword counts. Suppressed ads/off-topic items still fail
+    # the normal floor. No extra model calls are added.
+    practical = [r for r in scored if index.get(r["source"], {}).get("editorial_lane") == "practical"
+                 and r["score"] >= float(cfg.get("practical_min_heuristic", 2.5))
+                 and needs_judgement(get_verdict(store, r["nid"]), llm)
+                 and failures.get(r["nid"], 0) < max_failures]
+    quota = min(max_llm, int(cfg.get("practical_llm_slots", 3)))
+    preferred = practical[:quota]
+    ids = {r["nid"] for r in preferred}
+    scored = preferred + [r for r in scored if r["nid"] not in ids]
 
     if llm is not None and llm.enabled:
         failures = judge_failures(store)
@@ -503,7 +581,7 @@ def rerank_pending(store, sources, cfg, llm=None, verbose=False, fast=False):
         for row in scored:
             if llm_used >= max_llm:
                 break
-            if row["score"] < llm_floor:
+            if row["score"] < llm_floor and row["nid"] not in ids:
                 continue
             verdict = get_verdict(store, row["nid"])
             if needs_judgement(verdict, llm):
@@ -512,7 +590,12 @@ def rerank_pending(store, sources, cfg, llm=None, verbose=False, fast=False):
                     # items below it from being judged on every cycle.
                     continue
                 try:
-                    verdict = llm.judge(row, group=row.get("source_group"))
+                    remaining = judge_budget-(time.monotonic()-started)
+                    if remaining <= 0:
+                        break
+                    llm_used += 1  # Attempts, including failures, consume the allowance.
+                    with http.request_budget(remaining):
+                        verdict = llm.judge(row, group=row.get("source_group"))
                 except Exception as exc:
                     llm_errors += 1
                     if verbose:
@@ -529,11 +612,12 @@ def rerank_pending(store, sources, cfg, llm=None, verbose=False, fast=False):
                 api_errors_in_a_row = 0
                 if verdict is not None:
                     set_verdict(store, row["nid"], verdict)
-                    llm_used += 1
             if verdict:
                 judged += 1
             time.sleep(float(cfg.get("llm_delay_seconds", 0.3)))
-        repeat_calls = check_repeats(store, sources, cfg, llm)
+        remaining = float(cfg.get("llm_cycle_budget_seconds", 35))-(time.monotonic()-started)
+        repeat_cfg = dict(cfg, llm_cycle_budget_seconds=max(0, remaining))
+        repeat_calls = check_repeats(store, sources, repeat_cfg, llm)
     else:
         repeat_calls = 0
         if verbose:
@@ -553,7 +637,7 @@ def base_score(row, store, cfg, verdict=None):
         value = float(row.get("score") or 0)
     # An item with no date cannot be shown to be fresh, so it must not be able
     # to outrank things that can.
-    if not row.get("published"):
+    if freshness_age(row) is None:
         value = min(value, float(cfg.get("undated_score_cap", 5.0)))
     return value
 
@@ -632,6 +716,8 @@ def is_breaking_now(value, base_value, row, cfg, weights, stats, age, verdict):
     """
     if age is None or age > float(cfg.get("max_age_hours", 6)):
         return False
+    if (row.get("extra") or {}).get("freshness_basis") in ("discovery", "interest_growth"):
+        return False
     many_groups = stats.get("groups", 0) >= int(cfg.get("breaking_min_groups", 3))
     if not verdict or verdict.get("score") is None:
         return many_groups and value >= float(cfg.get("min_score", 3.0))
@@ -645,8 +731,7 @@ def select_due(store, sources, cfg, force=False, dry=False, llm=None):
     """Pick the items to deliver right now under the anti-spam budget.
 
     Makes no network calls: it runs in the Telegram thread. With dry=True
-    nothing is marked in the database and the stored repeat answers are not
-    required, so the selection can be inspected without disturbing the queue.
+    nothing is marked; the same freshness, budget and stored repeat gates apply.
     """
     ensure_verdict_table(store)
     weights = store.weights() if cfg.get("learning", True) else {}
@@ -681,6 +766,9 @@ def select_due(store, sources, cfg, force=False, dry=False, llm=None):
     last_id = store.last_send_id()
 
     pending = store.pending(limit=int(cfg.get("pending_scan_limit", 300)))
+    reasons = {"normal_budget": normal_budget, "breaking_budget": breaking_budget,
+               "waiting_editor": 0, "below_threshold": 0, "waiting_repeat": 0,
+               "candidates": 0, "gap_minutes": round(gap/60, 1)}
     candidates = []
     for row in pending:
         if row["source"] in references:
@@ -689,6 +777,10 @@ def select_due(store, sources, cfg, force=False, dry=False, llm=None):
                 store.mark(row["nid"], "signal")
             continue
         verdict = get_verdict(store, row["nid"])
+        if too_old_to_send(row, cfg):
+            if not dry:
+                store.mark(row["nid"], "stale")
+            continue
         unseen = needs_judgement(verdict, llm) if editor_on else not verdict
         if verdict and not unseen and verdict.get("verdict") == "skip":
             # Clear misses leave the queue; near misses stay, because a reference
@@ -700,12 +792,7 @@ def select_due(store, sources, cfg, force=False, dry=False, llm=None):
         if require_verdict and unseen:
             # The editor has not seen it yet, or saw it under an older profile:
             # it waits for the judge instead of slipping through on heuristics.
-            continue
-        # Freshness is enforced here, not only at collection: an item can go
-        # stale while it waits behind the hourly budget.
-        if too_old_to_send(row, cfg):
-            if not dry:
-                store.mark(row["nid"], "stale")
+            reasons["waiting_editor"] += 1
             continue
         stats = story_view(store, row.get("story_id"), references)
         # Someone already told this story; a second carrier is a repeat.
@@ -716,25 +803,29 @@ def select_due(store, sources, cfg, force=False, dry=False, llm=None):
         base = base_score(row, store, cfg, verdict=verdict)
         value = effective_score(row, store, cfg, stats=stats, verdict=verdict)
         if value < min_score:
+            reasons["below_threshold"] += 1
             continue
         if matches_recent(row, verdict, recent):
             if not dry:
                 store.mark(row["nid"], "duplicate")
             continue
-        if editor_on and recent and not dry:
+        if editor_on and recent:
             state = repeat_state(store, row["nid"], last_id)
             if state is None:
                 # The collection thread has not asked the editor since the last
                 # delivery; the item waits for the next cycle.
+                reasons["waiting_repeat"] += 1
                 continue
             if state[0] == "repeat":
-                store.mark(row["nid"], "duplicate")
+                if not dry:
+                    store.mark(row["nid"], "duplicate")
                 continue
         age = item_age_hours(row)
         breaking = is_breaking_now(value, base, row, cfg, weights, stats, age, verdict)
         candidates.append((value, breaking, row, verdict))
     candidates.sort(key=lambda entry: (entry[0], entry[2].get("discovered") or ""),
                     reverse=True)
+    reasons["candidates"] = len(candidates)
 
     chosen = []
     chosen_titles = []
@@ -773,6 +864,11 @@ def select_due(store, sources, cfg, force=False, dry=False, llm=None):
         else:
             normal_budget -= 1
         gap = 0.0
+    if not dry:
+        reasons["chosen"] = len(chosen)
+        status = json.dumps(reasons, ensure_ascii=False, sort_keys=True)
+        if store.kv_get("selection_status") != status:
+            store.kv_set("selection_status", status)
     return chosen
 
 
@@ -805,11 +901,13 @@ def deliver(tg, store, chat_id, chosen, cfg, verbose=False, sources=None):
         try:
             tg.send_message(chat_id, text, keyboard=keyboard)
         except Exception as exc:
+            store.kv_set("delivery_error", "nid=%s: %s" % (row["nid"], str(exc)[:250]))
             if verbose:
                 print("  [!] send failed nid=%s: %s" % (row["nid"], exc))
             continue
         store.mark(row["nid"], "sent", sent=True,
                    kind="breaking" if breaking else "news")
+        store.kv_set("delivery_error", "")
         sent += 1
         if verbose:
             print("  [->] %s  (%.2f)" % ((row.get("title") or "")[:70], value))

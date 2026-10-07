@@ -1,0 +1,35 @@
+{
+  "local_tests": 82,
+  "server_staging_tests": 82,
+  "review_regressions": 13,
+  "diff_check": "OK",
+  "dry_run_original_sha256": "9082df4df785a91e5aaa5242302b21c06c22a077a5862007e0459850fb84ff7d",
+  "dry_run_model_calls": 0,
+  "dry_run_telegram_calls": 0,
+  "migration": {
+    "old_tables": 15,
+    "old_rows": 54012,
+    "all_old_values_preserved": true,
+    "sqlite_quick_check": "ok"
+  },
+  "final_x": [
+    {
+      "name": "x_html_karpathy",
+      "count": 5,
+      "error": null,
+      "truncated": 2
+    },
+    {
+      "name": "x_html_hamelhusain",
+      "count": 5,
+      "error": null,
+      "truncated": 0
+    },
+    {
+      "name": "x_html_mattpocockuk",
+      "count": 5,
+      "error": null,
+      "truncated": 0
+    }
+  ]
+}

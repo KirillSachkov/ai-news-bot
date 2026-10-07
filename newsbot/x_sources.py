@@ -5,9 +5,9 @@ built as two independent stages, because the reliable free routes only give
 content by post ID while only the unstable routes give a timeline:
 
   Stage 1, discovery (which posts are new?):
-      twiiit.com -> rss.xcancel.com -> other Nitter mirrors
-      Each is an RSS feed of a public profile. All of them are third-party
-      mirrors and can go dark without notice, so we try them in order and treat
+      rss.xcancel.com (other mirrors were removed after failed live checks).
+      The separate x_html adapter reads a limited public profile preview.
+      These routes can go dark without notice, so we treat
       "all routes silent" as a health problem, not as "no news".
 
   Stage 2, content (what does post <id> actually say?):
@@ -119,6 +119,8 @@ def discover(handle, limit=15, preferred=None):
             continue
         text = result.text()
         if "not yet whitelist" in text.lower():
+            if _ROUTE_HEALTH is not None:
+                _ROUTE_HEALTH.route_note(name, False, "whitelist")
             errors.append("%s: this reader is not whitelisted yet "
                           "(email rss@xcancel.com the ID from the feed to get "
                           "whitelisted, once)" % name)

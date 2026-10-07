@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import json
 from datetime import datetime, timezone
 
 # Editorial rubrics (see editorial.md): icon and the label shown on the card.
@@ -31,6 +32,32 @@ VERDICT_LABEL = {"good": "✅ Полезно", "bad": "❌ Не то"}
 
 def esc(value):
     return html.escape(str(value or ""), quote=False)
+
+
+def esc_clip(value, limit):
+    """Clip escaped text without breaking an HTML entity or a surrounding tag."""
+    output, size = [], 0
+    for char in str(value or ""):
+        escaped = esc(char)
+        if size+len(escaped) > limit:
+            break
+        output.append(escaped)
+        size += len(escaped)
+    return "".join(output)
+
+
+def message_parts(text, limit=3900):
+    """Status/source lines have self-contained tags; split only between lines."""
+    parts, lines, size = [], [], 0
+    for line in text.splitlines():
+        if lines and size+len(line)+1 > limit:
+            parts.append("\n".join(lines))
+            lines, size = [], 0
+        lines.append(line)
+        size += len(line)+1
+    if lines:
+        parts.append("\n".join(lines))
+    return parts
 
 
 def human_age(published):
@@ -78,10 +105,10 @@ def item_card(item, verdict=None, breaking=False, reason=None, story=None):
     story = story or {}
     icon, label = RUBRIC[rubric_of(verdict)]
     prefix = "\U0001F525 " if breaking else ""
-    title = esc(verdict.get("title_ru") or item.get("title") or "Без заголовка")
+    title = esc_clip(verdict.get("title_ru") or item.get("title") or "Без заголовка", 300)
 
     body = verdict.get("summary_ru") or item.get("summary") or ""
-    body = esc(body.strip())
+    body = esc_clip(body.strip(), 1800)
 
     lines = ["%s%s <b>%s</b>" % (prefix, icon, title)]
     if body:
@@ -100,7 +127,7 @@ def item_card(item, verdict=None, breaking=False, reason=None, story=None):
     lines.append(" · ".join(note))
     why = verdict.get("reason") or reason
     if why:
-        lines.append("<i>почему: %s</i>" % esc(why))
+        lines.append("<i>почему: %s</i>" % esc_clip(why, 450))
 
     signals = []
     if story.get("reference"):
@@ -111,11 +138,17 @@ def item_card(item, verdict=None, breaking=False, reason=None, story=None):
     if signals:
         lines.append(" · ".join(signals))
 
-    meta = [esc(item.get("source") or "")]
+    meta = [esc_clip(item.get("source") or "", 120)]
     age = human_age(item.get("published"))
     if age:
         meta.append(age)
     extra = item.get("extra") or {}
+    if extra.get("summary_truncated"):
+        meta.append("описание сокращено")
+    if extra.get("freshness_basis") == "discovery":
+        meta.append("найдено: %s" % human_age(extra.get("freshness_at")))
+    if extra.get("growth_delta") and extra.get("growth_hours"):
+        meta.append("рост: +%s за %s ч" % (extra["growth_delta"], extra["growth_hours"]))
     if extra.get("points"):
         meta.append("⬆ %s" % extra["points"])
     lines.append("")
@@ -126,10 +159,11 @@ def item_card(item, verdict=None, breaking=False, reason=None, story=None):
     # link lives on the button instead, where its text is never shown.
     url = item.get("url") or ""
     if url and "news.google.com" not in url:
-        lines.append(esc(url))
+        if len(esc(url)) <= 700:
+            lines.append(esc(url))
 
     text = "\n".join(lines)
-    return text[:4000]
+    return text
 
 
 def feedback_keyboard(nid, url=None, verdict=None):
@@ -159,10 +193,13 @@ def rated_text(original_text, verdict_label):
     return "%s\n\n<b>%s</b>" % (esc(original_text), esc(verdict_label))
 
 
-def status_text(store, cfg, chat_id=None, fast=None):
+def status_text(store, cfg, chat_id=None, fast=None, sources=None):
     counts = store.counts()
     feedback = counts.get("feedback") or {}
     health = store.source_health()
+    if sources is not None:
+        names = {s["name"] for s in sources if s.get("enabled", True)}
+        health = [s for s in health if s["name"] in names]
     broken = [row for row in health if row["fail_count"] and row["fail_count"] >= 3]
     lines = [
         "<b>Состояние</b>",
@@ -190,6 +227,29 @@ def status_text(store, cfg, chat_id=None, fast=None):
             fast, cfg.get("fast_interval_seconds"), cfg.get("fetch_interval_seconds")))
     if chat_id:
         lines.append("chat_id: <code>%s</code>" % chat_id)
+    last = store.last_collection()
+    if last:
+        stats = json.loads(last["stats"])
+        lines.append("последний сбор: %s · %s · %s с" % (
+            esc(last["label"]), esc(last["finished"]), stats.get("seconds", "?")))
+        lines.append("сбор: новых %s, старых %s, уже известных %s, ошибок %s, cooldown %s" % (
+            stats.get("new", 0), stats.get("old", 0), stats.get("seen", 0),
+            stats.get("failed", 0), stats.get("cooldown", 0)))
+        if stats.get("overdue_fast"):
+            lines.append("полный сбор превысил интервал быстрой полосы")
+    selection = json.loads(store.kv_get("selection_status", "{}"))
+    if selection:
+        lines.append("отбор: ждут редактора %s, ниже порога %s, ждут проверки повторов %s" % (
+            selection.get("waiting_editor", 0), selection.get("below_threshold", 0),
+            selection.get("waiting_repeat", 0)))
+        lines.append("слотов сейчас с учётом часа и суток: обычных %s, срочных %s" % (
+            selection.get("normal_budget", 0), selection.get("breaking_budget", 0)))
+    if store.kv_get("paused") == "1":
+        lines.append("доставка на паузе")
+    if store.kv_get("muted_until"):
+        lines.append("тишина до: %s" % esc(store.kv_get("muted_until")))
+    if store.kv_get("delivery_error"):
+        lines.append("ошибка доставки: %s" % esc(store.kv_get("delivery_error")))
     if broken:
         lines.append("")
         lines.append("<b>Молчат:</b>")
@@ -217,6 +277,10 @@ def sources_text(store, sources):
             # A warning without a reason is useless, so show the short cause.
             if state.get("fail_count", 0) and state.get("last_error"):
                 line += " — <i>%s</i>" % esc(short_reason(state["last_error"]))
+            if state.get("newest"):
+                line += " · свежайшее: %s" % esc(state["newest"][:16])
+            if state.get("last_check"):
+                line += " · %s с" % state.get("seconds", 0)
             lines.append(line)
     return "\n".join(lines)
 
@@ -234,6 +298,8 @@ def short_reason(error):
         return "зеркало блокирует по IP (403)"
     if "429" in text:
         return "лимит запросов (429)"
+    if "451" in text:
+        return "доступ к xcancel ограничен (451)"
     if "410" in text:
         return "фид отключён (410)"
     if "html page" in text:

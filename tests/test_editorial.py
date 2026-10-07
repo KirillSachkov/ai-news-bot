@@ -262,14 +262,14 @@ class RepeatTest(StoreCase):
         self.assertEqual(repeat_editor.calls, 1)
         self.assertEqual(self.status(candidate), "duplicate")
 
-    def test_dry_run_does_not_wait_for_the_repeat_check(self):
+    def test_dry_run_preserves_the_live_repeat_gate(self):
         sent = self.add("Nvidia agrees to buy Hugging Face",
                         verdict=judged(9, "nvidia acquires hugging face"))
         self.send(sent)
         self.add("Jensen Huang explains the Poolside bet", source="hn_front", group="community",
                  verdict=judged(8, "jensen huang explains poolside"))
         editor = FakeEditor(duplicate_index=0)
-        self.assertEqual(len(self.select(llm=editor, dry=True)), 1)
+        self.assertEqual(self.select(llm=editor, dry=True), [])
         self.assertEqual(editor.calls, 0)
 
 
@@ -402,7 +402,8 @@ class EditorTest(unittest.TestCase):
         editor._chat = lambda messages, json_mode=True: ('{"duplicate_of": null}', 10, 5)
         self.assertIsNone(editor.same_story({"title": "D"}, {}, recent))
         editor._chat = lambda messages, json_mode=True: ('{"duplicate_of": 9}', 10, 5)
-        self.assertIsNone(editor.same_story({"title": "D"}, {}, recent))
+        with self.assertRaises(LLMError):
+            editor.same_story({"title": "D"}, {}, recent)
 
     def test_loose_json(self):
         self.assertEqual(_loads_loose('```json\n{"score": 8}\n```'), {"score": 8})

@@ -117,8 +117,17 @@ def score_item(item, source_cfg, weights, learning=True, cfg=None):
     # two-day-old one ranked identically - which is exactly how stale news got
     # through. Now every hour costs something: +2.0 fresh, 0 at 12h, -2.0 at a
     # day, floored at -4.0.
-    age = _age_hours(item.get("published"))
-    freshness = max(-4.0, min(2.0, 2.0 - (age / 6.0)))
+    extra = item.get("extra") or {}
+    if isinstance(extra, str):
+        try:
+            extra = json.loads(extra)
+        except ValueError:
+            extra = {}
+    if not isinstance(extra, dict):
+        extra = {}
+    age = _age_hours(extra.get("freshness_at") or item.get("published"))
+    window = float(extra.get("max_age_hours") or source_cfg.get("freshness_hours") or 12)
+    freshness = max(-4.0, min(2.0, 2.0 - (age / max(6, window/2))))
     score += freshness
     reasons.append("freshness(%.1fh) %+.2f" % (age, freshness))
     if not item.get("published"):

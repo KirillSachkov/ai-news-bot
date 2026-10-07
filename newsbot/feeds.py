@@ -105,6 +105,8 @@ def parse_feed(payload):
         root = ET.fromstring(raw)
     except ET.ParseError as exc:
         raise ValueError("invalid feed XML: %s" % exc)
+    if local_name(root.tag).lower() not in ("rss", "feed", "rdf"):
+        raise ValueError("XML root is not RSS/Atom: %s" % local_name(root.tag))
 
     items = []
     for element in root.iter():
@@ -128,8 +130,9 @@ def parse_feed(payload):
                 continue
             if name == "category":
                 continue
-            if name not in children and (child.text or "").strip():
-                children[name] = child.text.strip()
+            value = " ".join(child.itertext()).strip()
+            if name not in children and value:
+                children[name] = value
 
         title = strip_html(children.get("title", ""))
         if not title:
@@ -150,6 +153,8 @@ def parse_feed(payload):
             or children.get("summary")
             or children.get("content")
             or children.get("encoded")
+            or next((" ".join(child.itertext()) for child in element.iter()
+                     if local_name(child.tag).lower() == "description"), "")
             or ""
         )
         if len(summary) > 600:
@@ -193,7 +198,7 @@ def rss(url, limit=None, etag=None, last_modified=None):
         return [], str(exc), {}
     if limit:
         try:
-            items = items[:int(limit)]
+            items = sorted(items, key=lambda i: i.get("published") or "", reverse=True)[:int(limit)]
         except (TypeError, ValueError):
             pass
     validators = {
@@ -225,7 +230,7 @@ def _hn(tags, limit, by_date=False):
             "uid": "hn:%s" % object_id,
             "title": strip_html(title),
             "url": link,
-            "summary": "",
+            "summary": strip_html(hit.get("story_text") or "")[:600],
             "published": to_iso(hit.get("created_at")),
             "extra": {
                 "points": hit.get("points") or 0,
@@ -297,6 +302,7 @@ def hf_trending_models(limit=15):
                            model.get("likes") or 0, model.get("downloads") or 0)),
             "published": to_iso(model.get("createdAt")),
             "extra": {"points": model.get("likes") or 0,
+                      "discovery_kind": "model",
                       "downloads": model.get("downloads") or 0},
         })
     return items, None
@@ -368,9 +374,7 @@ def telegram_web(channel, limit=20):
                       # discovery channel available (see x_sources.mine_links).
                       "links": list(dict.fromkeys(links))[:12]},
         })
-        if len(items) >= limit:
-            break
-    return items, None
+    return sorted(items, key=lambda i: i.get("published") or "", reverse=True)[:limit], None
 
 
 # --------------------------------------------------------------------------- #
@@ -390,18 +394,23 @@ def _curl_json(url, headers, timeout=25):
     import shutil
     import subprocess
 
-    from .http import USER_AGENT
+    from .http import USER_AGENT, remaining_timeout
 
     curl = shutil.which("curl")
     if not curl:
         return None, "curl not found"
-    command = [curl, "-sS", "--max-time", str(int(timeout)), "-A", USER_AGENT,
+    try:
+        timeout = remaining_timeout(timeout)
+    except TimeoutError as exc:
+        return None, str(exc)
+    command = [curl, "-sS", "--max-time", str(timeout), "-A", USER_AGENT,
                "-w", "\n%{http_code}"]
     for key, value in headers.items():
         command += ["-H", "%s: %s" % (key, value)]
     command.append(url)
     try:
-        done = subprocess.run(command, capture_output=True, text=True, timeout=timeout + 5)
+        done = subprocess.run(command, capture_output=True, text=True,
+                              timeout=remaining_timeout(timeout))
     except (OSError, subprocess.SubprocessError) as exc:
         return None, "curl failed: %s" % exc
     body, _, status = done.stdout.rpartition("\n")
@@ -414,15 +423,15 @@ def _curl_json(url, headers, timeout=25):
         return None, "invalid JSON from curl: %s" % exc
 
 
-def github_rising(days=7, min_stars=150, limit=20, token=None):
+def github_rising(days=7, min_stars=150, limit=20, token=None, topic=None):
     """Repositories created in the last `days`, most starred first.
 
     "A useful free tool you can take today" is the most frequent rubric of the
     reference channels, and github.com is the domain @codecamp links most (64
     of 361 posts), yet no other source brings such finds. A young repository
-    climbing into this list is that kind of news, so the moment it first
-    appears here is used as its publication time; the creation date travels in
-    the summary for the editor.
+    entering this list is a discovery candidate. `published` stays the real
+    creation date; Store records first discovery separately and only repeated
+    observations can establish growth in interest.
 
     Anonymous search works from a laptop but not reliably from a server: from
     the production host GitHub refuses part of the stdlib requests with 403
@@ -442,6 +451,9 @@ def github_rising(days=7, min_stars=150, limit=20, token=None):
     url = ("https://api.github.com/search/repositories?q=created:>%s+stars:>=%d"
            "&sort=stars&order=desc&per_page=%d"
            % (since.strftime("%Y-%m-%d"), int(min_stars), int(limit)))
+    if topic:
+        from urllib.parse import quote
+        url = url.replace("&sort=", "+topic:%s&sort=" % quote(topic, safe=""))
     data, error = fetch_json(url, extra_headers=headers)
     if error in ("HTTP 403", "HTTP 429") and not token:
         data, curl_error = _curl_json(url, headers)
@@ -473,8 +485,9 @@ def github_rising(days=7, min_stars=150, limit=20, token=None):
             "title": title,
             "url": repo.get("html_url") or "https://github.com/%s" % name,
             "summary": summary[:600],
-            "published": now_iso(),
-            "extra": {"points": stars, "created_at": repo.get("created_at"),
+            "published": to_iso(repo.get("created_at")),
+            "extra": {"points": stars, "discovery_kind": "project",
+                      "created_at": repo.get("created_at"),
                       "language": repo.get("language")},
         })
     return items, None
@@ -487,7 +500,8 @@ def github_rising(days=7, min_stars=150, limit=20, token=None):
 ADAPTERS = {
     "github_rising": lambda source: github_rising(source.get("days", 7),
                                                   source.get("min_stars", 150),
-                                                  source.get("limit", 20)),
+                                                  source.get("limit", 20),
+                                                  topic=source.get("topic")),
     "rss": lambda source: rss(source["url"], source.get("limit")),
     "hn_front_page": lambda source: hn_front_page(source.get("limit", 25)),
     "hn_show": lambda source: hn_show(source.get("limit", 20)),
@@ -509,7 +523,11 @@ def collect(source):
 def collect_with_validators(source, etag=None, last_modified=None):
     """Like collect(), but also returns HTTP cache validators when available."""
     if source.get("type") == "rss":
-        return rss(source["url"], source.get("limit"),
-                   etag=etag, last_modified=last_modified)
+        items, error, validators = rss(source["url"], source.get("limit"),
+                                      etag=etag, last_modified=last_modified)
+        if source.get("title_prefix"):
+            for item in items:
+                item["title"] = "%s: %s" % (source["title_prefix"], item["title"])
+        return items, error, validators
     items, error = collect(source)
     return items, error, {}

@@ -1,0 +1,1215 @@
+{
+  "period": [
+    {
+      "start": "2026-09-11T08:52:25+00:00",
+      "end": "2026-10-07T10:30:54+00:00",
+      "n": 21266
+    }
+  ],
+  "statuses": [
+    {
+      "status": "dropped",
+      "n": 397
+    },
+    {
+      "status": "duplicate",
+      "n": 1362
+    },
+    {
+      "status": "expired",
+      "n": 7141
+    },
+    {
+      "status": "pending",
+      "n": 93
+    },
+    {
+      "status": "rejected",
+      "n": 8283
+    },
+    {
+      "status": "sent",
+      "n": 359
+    },
+    {
+      "status": "signal",
+      "n": 199
+    },
+    {
+      "status": "stale",
+      "n": 3432
+    }
+  ],
+  "daily": [
+    {
+      "day": "2026-09-11",
+      "collected": 1008,
+      "sent": 38,
+      "rejected": 264,
+      "expired": 0,
+      "stale": 305,
+      "duplicate": 4
+    },
+    {
+      "day": "2026-09-12",
+      "collected": 608,
+      "sent": 48,
+      "rejected": 201,
+      "expired": 0,
+      "stale": 317,
+      "duplicate": 42
+    },
+    {
+      "day": "2026-09-13",
+      "collected": 549,
+      "sent": 21,
+      "rejected": 207,
+      "expired": 187,
+      "stale": 119,
+      "duplicate": 14
+    },
+    {
+      "day": "2026-09-14",
+      "collected": 945,
+      "sent": 10,
+      "rejected": 382,
+      "expired": 380,
+      "stale": 145,
+      "duplicate": 21
+    },
+    {
+      "day": "2026-09-15",
+      "collected": 916,
+      "sent": 10,
+      "rejected": 368,
+      "expired": 383,
+      "stale": 121,
+      "duplicate": 22
+    },
+    {
+      "day": "2026-09-16",
+      "collected": 927,
+      "sent": 10,
+      "rejected": 348,
+      "expired": 380,
+      "stale": 137,
+      "duplicate": 41
+    },
+    {
+      "day": "2026-09-17",
+      "collected": 886,
+      "sent": 10,
+      "rejected": 323,
+      "expired": 361,
+      "stale": 135,
+      "duplicate": 51
+    },
+    {
+      "day": "2026-09-18",
+      "collected": 810,
+      "sent": 10,
+      "rejected": 282,
+      "expired": 331,
+      "stale": 125,
+      "duplicate": 53
+    },
+    {
+      "day": "2026-09-19",
+      "collected": 533,
+      "sent": 11,
+      "rejected": 203,
+      "expired": 196,
+      "stale": 69,
+      "duplicate": 47
+    },
+    {
+      "day": "2026-09-20",
+      "collected": 583,
+      "sent": 11,
+      "rejected": 250,
+      "expired": 217,
+      "stale": 63,
+      "duplicate": 36
+    },
+    {
+      "day": "2026-09-21",
+      "collected": 963,
+      "sent": 12,
+      "rejected": 431,
+      "expired": 326,
+      "stale": 149,
+      "duplicate": 33
+    },
+    {
+      "day": "2026-09-22",
+      "collected": 953,
+      "sent": 12,
+      "rejected": 412,
+      "expired": 337,
+      "stale": 92,
+      "duplicate": 78
+    },
+    {
+      "day": "2026-09-23",
+      "collected": 948,
+      "sent": 10,
+      "rejected": 409,
+      "expired": 361,
+      "stale": 108,
+      "duplicate": 49
+    },
+    {
+      "day": "2026-09-24",
+      "collected": 876,
+      "sent": 10,
+      "rejected": 300,
+      "expired": 356,
+      "stale": 114,
+      "duplicate": 80
+    },
+    {
+      "day": "2026-09-25",
+      "collected": 828,
+      "sent": 10,
+      "rejected": 281,
+      "expired": 335,
+      "stale": 117,
+      "duplicate": 80
+    },
+    {
+      "day": "2026-09-26",
+      "collected": 528,
+      "sent": 11,
+      "rejected": 187,
+      "expired": 195,
+      "stale": 64,
+      "duplicate": 71
+    },
+    {
+      "day": "2026-09-27",
+      "collected": 589,
+      "sent": 10,
+      "rejected": 257,
+      "expired": 179,
+      "stale": 89,
+      "duplicate": 54
+    },
+    {
+      "day": "2026-09-28",
+      "collected": 1009,
+      "sent": 13,
+      "rejected": 446,
+      "expired": 307,
+      "stale": 159,
+      "duplicate": 78
+    },
+    {
+      "day": "2026-09-29",
+      "collected": 943,
+      "sent": 11,
+      "rejected": 292,
+      "expired": 343,
+      "stale": 140,
+      "duplicate": 138
+    },
+    {
+      "day": "2026-09-30",
+      "collected": 859,
+      "sent": 13,
+      "rejected": 311,
+      "expired": 318,
+      "stale": 122,
+      "duplicate": 83
+    },
+    {
+      "day": "2026-10-01",
+      "collected": 881,
+      "sent": 11,
+      "rejected": 365,
+      "expired": 315,
+      "stale": 108,
+      "duplicate": 69
+    },
+    {
+      "day": "2026-10-02",
+      "collected": 856,
+      "sent": 12,
+      "rejected": 356,
+      "expired": 297,
+      "stale": 126,
+      "duplicate": 57
+    },
+    {
+      "day": "2026-10-03",
+      "collected": 499,
+      "sent": 9,
+      "rejected": 206,
+      "expired": 155,
+      "stale": 100,
+      "duplicate": 25
+    },
+    {
+      "day": "2026-10-04",
+      "collected": 539,
+      "sent": 9,
+      "rejected": 233,
+      "expired": 191,
+      "stale": 81,
+      "duplicate": 24
+    },
+    {
+      "day": "2026-10-05",
+      "collected": 940,
+      "sent": 11,
+      "rejected": 445,
+      "expired": 291,
+      "stale": 150,
+      "duplicate": 43
+    },
+    {
+      "day": "2026-10-06",
+      "collected": 969,
+      "sent": 13,
+      "rejected": 391,
+      "expired": 341,
+      "stale": 156,
+      "duplicate": 59
+    },
+    {
+      "day": "2026-10-07",
+      "collected": 321,
+      "sent": 3,
+      "rejected": 133,
+      "expired": 59,
+      "stale": 21,
+      "duplicate": 10
+    }
+  ],
+  "sends_daily": [
+    {
+      "day": "2026-09-11",
+      "kind": "breaking",
+      "n": 6
+    },
+    {
+      "day": "2026-09-11",
+      "kind": "news",
+      "n": 30
+    },
+    {
+      "day": "2026-09-12",
+      "kind": "breaking",
+      "n": 2
+    },
+    {
+      "day": "2026-09-12",
+      "kind": "news",
+      "n": 47
+    },
+    {
+      "day": "2026-09-13",
+      "kind": "news",
+      "n": 22
+    },
+    {
+      "day": "2026-09-14",
+      "kind": "news",
+      "n": 10
+    },
+    {
+      "day": "2026-09-15",
+      "kind": "news",
+      "n": 10
+    },
+    {
+      "day": "2026-09-16",
+      "kind": "news",
+      "n": 10
+    },
+    {
+      "day": "2026-09-17",
+      "kind": "news",
+      "n": 10
+    },
+    {
+      "day": "2026-09-18",
+      "kind": "news",
+      "n": 10
+    },
+    {
+      "day": "2026-09-19",
+      "kind": "breaking",
+      "n": 1
+    },
+    {
+      "day": "2026-09-19",
+      "kind": "news",
+      "n": 10
+    },
+    {
+      "day": "2026-09-20",
+      "kind": "breaking",
+      "n": 1
+    },
+    {
+      "day": "2026-09-20",
+      "kind": "news",
+      "n": 10
+    },
+    {
+      "day": "2026-09-21",
+      "kind": "breaking",
+      "n": 2
+    },
+    {
+      "day": "2026-09-21",
+      "kind": "news",
+      "n": 10
+    },
+    {
+      "day": "2026-09-22",
+      "kind": "breaking",
+      "n": 2
+    },
+    {
+      "day": "2026-09-22",
+      "kind": "news",
+      "n": 10
+    },
+    {
+      "day": "2026-09-23",
+      "kind": "news",
+      "n": 10
+    },
+    {
+      "day": "2026-09-24",
+      "kind": "news",
+      "n": 10
+    },
+    {
+      "day": "2026-09-25",
+      "kind": "news",
+      "n": 10
+    },
+    {
+      "day": "2026-09-26",
+      "kind": "breaking",
+      "n": 1
+    },
+    {
+      "day": "2026-09-26",
+      "kind": "news",
+      "n": 10
+    },
+    {
+      "day": "2026-09-27",
+      "kind": "news",
+      "n": 10
+    },
+    {
+      "day": "2026-09-28",
+      "kind": "breaking",
+      "n": 3
+    },
+    {
+      "day": "2026-09-28",
+      "kind": "news",
+      "n": 10
+    },
+    {
+      "day": "2026-09-29",
+      "kind": "breaking",
+      "n": 1
+    },
+    {
+      "day": "2026-09-29",
+      "kind": "news",
+      "n": 10
+    },
+    {
+      "day": "2026-09-30",
+      "kind": "breaking",
+      "n": 3
+    },
+    {
+      "day": "2026-09-30",
+      "kind": "news",
+      "n": 10
+    },
+    {
+      "day": "2026-10-01",
+      "kind": "breaking",
+      "n": 1
+    },
+    {
+      "day": "2026-10-01",
+      "kind": "news",
+      "n": 10
+    },
+    {
+      "day": "2026-10-02",
+      "kind": "breaking",
+      "n": 2
+    },
+    {
+      "day": "2026-10-02",
+      "kind": "news",
+      "n": 10
+    },
+    {
+      "day": "2026-10-03",
+      "kind": "news",
+      "n": 9
+    },
+    {
+      "day": "2026-10-04",
+      "kind": "news",
+      "n": 9
+    },
+    {
+      "day": "2026-10-05",
+      "kind": "breaking",
+      "n": 1
+    },
+    {
+      "day": "2026-10-05",
+      "kind": "news",
+      "n": 10
+    },
+    {
+      "day": "2026-10-06",
+      "kind": "breaking",
+      "n": 1
+    },
+    {
+      "day": "2026-10-06",
+      "kind": "news",
+      "n": 10
+    },
+    {
+      "day": "2026-10-07",
+      "kind": "breaking",
+      "n": 1
+    },
+    {
+      "day": "2026-10-07",
+      "kind": "news",
+      "n": 4
+    }
+  ],
+  "source_status": [
+    {
+      "source": "gnews_ai_en",
+      "n": 4835,
+      "sent": 70,
+      "rejected": 2540,
+      "expired": 47,
+      "stale": 1237,
+      "duplicate": 894
+    },
+    {
+      "source": "techmeme",
+      "n": 1050,
+      "sent": 52,
+      "rejected": 558,
+      "expired": 105,
+      "stale": 254,
+      "duplicate": 65
+    },
+    {
+      "source": "reddit_localllama",
+      "n": 1201,
+      "sent": 44,
+      "rejected": 306,
+      "expired": 499,
+      "stale": 320,
+      "duplicate": 27
+    },
+    {
+      "source": "habr_news",
+      "n": 1122,
+      "sent": 35,
+      "rejected": 175,
+      "expired": 698,
+      "stale": 105,
+      "duplicate": 63
+    },
+    {
+      "source": "the_decoder",
+      "n": 210,
+      "sent": 31,
+      "rejected": 29,
+      "expired": 5,
+      "stale": 83,
+      "duplicate": 52
+    },
+    {
+      "source": "hn_front",
+      "n": 1296,
+      "sent": 24,
+      "rejected": 1029,
+      "expired": 25,
+      "stale": 165,
+      "duplicate": 35
+    },
+    {
+      "source": "hn_show",
+      "n": 3175,
+      "sent": 23,
+      "rejected": 239,
+      "expired": 2428,
+      "stale": 431,
+      "duplicate": 10
+    },
+    {
+      "source": "marktechpost",
+      "n": 123,
+      "sent": 21,
+      "rejected": 27,
+      "expired": 8,
+      "stale": 39,
+      "duplicate": 20
+    },
+    {
+      "source": "github_rising",
+      "n": 186,
+      "sent": 10,
+      "rejected": 74,
+      "expired": 4,
+      "stale": 88,
+      "duplicate": 10
+    },
+    {
+      "source": "verge_ai",
+      "n": 158,
+      "sent": 9,
+      "rejected": 54,
+      "expired": 19,
+      "stale": 40,
+      "duplicate": 26
+    },
+    {
+      "source": "arxiv_cs_ai",
+      "n": 400,
+      "sent": 8,
+      "rejected": 60,
+      "expired": 287,
+      "stale": 21,
+      "duplicate": 0
+    },
+    {
+      "source": "gnews_ai_ru",
+      "n": 3677,
+      "sent": 6,
+      "rejected": 1522,
+      "expired": 1710,
+      "stale": 329,
+      "duplicate": 41
+    },
+    {
+      "source": "simonwillison",
+      "n": 72,
+      "sent": 6,
+      "rejected": 24,
+      "expired": 13,
+      "stale": 16,
+      "duplicate": 7
+    },
+    {
+      "source": "bsky_techcrunch",
+      "n": 500,
+      "sent": 5,
+      "rejected": 193,
+      "expired": 212,
+      "stale": 64,
+      "duplicate": 25
+    },
+    {
+      "source": "techcrunch_ai",
+      "n": 292,
+      "sent": 3,
+      "rejected": 109,
+      "expired": 76,
+      "stale": 52,
+      "duplicate": 33
+    },
+    {
+      "source": "tg_ai_newz",
+      "n": 40,
+      "sent": 2,
+      "rejected": 6,
+      "expired": 5,
+      "stale": 15,
+      "duplicate": 11
+    },
+    {
+      "source": "latent_space",
+      "n": 33,
+      "sent": 2,
+      "rejected": 14,
+      "expired": 9,
+      "stale": 2,
+      "duplicate": 5
+    },
+    {
+      "source": "bsky_theverge",
+      "n": 531,
+      "sent": 1,
+      "rejected": 397,
+      "expired": 74,
+      "stale": 45,
+      "duplicate": 13
+    },
+    {
+      "source": "tg_data_secrets",
+      "n": 137,
+      "sent": 1,
+      "rejected": 3,
+      "expired": 0,
+      "stale": 7,
+      "duplicate": 0
+    },
+    {
+      "source": "bsky_emollick",
+      "n": 74,
+      "sent": 1,
+      "rejected": 53,
+      "expired": 2,
+      "stale": 16,
+      "duplicate": 2
+    },
+    {
+      "source": "lobsters_ai",
+      "n": 51,
+      "sent": 1,
+      "rejected": 8,
+      "expired": 37,
+      "stale": 5,
+      "duplicate": 0
+    },
+    {
+      "source": "openai_news",
+      "n": 37,
+      "sent": 1,
+      "rejected": 21,
+      "expired": 4,
+      "stale": 2,
+      "duplicate": 0
+    },
+    {
+      "source": "tg_seeallochnaya",
+      "n": 30,
+      "sent": 1,
+      "rejected": 2,
+      "expired": 6,
+      "stale": 17,
+      "duplicate": 4
+    },
+    {
+      "source": "tg_crypto_essay",
+      "n": 15,
+      "sent": 1,
+      "rejected": 0,
+      "expired": 11,
+      "stale": 3,
+      "duplicate": 0
+    },
+    {
+      "source": "deepmind_blog",
+      "n": 7,
+      "sent": 1,
+      "rejected": 2,
+      "expired": 0,
+      "stale": 2,
+      "duplicate": 2
+    },
+    {
+      "source": "arxiv_cs_cl",
+      "n": 450,
+      "sent": 0,
+      "rejected": 170,
+      "expired": 254,
+      "stale": 1,
+      "duplicate": 0
+    },
+    {
+      "source": "arxiv_cs_lg",
+      "n": 450,
+      "sent": 0,
+      "rejected": 136,
+      "expired": 291,
+      "stale": 0,
+      "duplicate": 0
+    },
+    {
+      "source": "gh_llamacpp",
+      "n": 425,
+      "sent": 0,
+      "rejected": 306,
+      "expired": 86,
+      "stale": 18,
+      "duplicate": 0
+    },
+    {
+      "source": "arstechnica",
+      "n": 267,
+      "sent": 0,
+      "rejected": 44,
+      "expired": 168,
+      "stale": 22,
+      "duplicate": 13
+    },
+    {
+      "source": "tg_codecamp",
+      "n": 106,
+      "sent": 0,
+      "rejected": 0,
+      "expired": 0,
+      "stale": 6,
+      "duplicate": 0
+    },
+    {
+      "source": "aws_ml",
+      "n": 104,
+      "sent": 0,
+      "rejected": 80,
+      "expired": 1,
+      "stale": 7,
+      "duplicate": 3
+    },
+    {
+      "source": "gh_ollama",
+      "n": 33,
+      "sent": 0,
+      "rejected": 10,
+      "expired": 20,
+      "stale": 0,
+      "duplicate": 0
+    },
+    {
+      "source": "nvidia_blog",
+      "n": 32,
+      "sent": 0,
+      "rejected": 22,
+      "expired": 2,
+      "stale": 3,
+      "duplicate": 0
+    },
+    {
+      "source": "bsky_natolambert",
+      "n": 26,
+      "sent": 0,
+      "rejected": 20,
+      "expired": 2,
+      "stale": 4,
+      "duplicate": 0
+    },
+    {
+      "source": "bsky_github",
+      "n": 17,
+      "sent": 0,
+      "rejected": 9,
+      "expired": 2,
+      "stale": 6,
+      "duplicate": 0
+    },
+    {
+      "source": "gh_vllm",
+      "n": 17,
+      "sent": 0,
+      "rejected": 10,
+      "expired": 4,
+      "stale": 1,
+      "duplicate": 0
+    },
+    {
+      "source": "google_ai_blog",
+      "n": 16,
+      "sent": 0,
+      "rejected": 10,
+      "expired": 3,
+      "stale": 0,
+      "duplicate": 0
+    },
+    {
+      "source": "hf_blog",
+      "n": 16,
+      "sent": 0,
+      "rejected": 12,
+      "expired": 2,
+      "stale": 0,
+      "duplicate": 0
+    },
+    {
+      "source": "gh_comfyui",
+      "n": 14,
+      "sent": 0,
+      "rejected": 0,
+      "expired": 12,
+      "stale": 0,
+      "duplicate": 0
+    },
+    {
+      "source": "alignment_forum",
+      "n": 11,
+      "sent": 0,
+      "rejected": 1,
+      "expired": 5,
+      "stale": 2,
+      "duplicate": 0
+    },
+    {
+      "source": "hf_papers",
+      "n": 10,
+      "sent": 0,
+      "rejected": 0,
+      "expired": 0,
+      "stale": 2,
+      "duplicate": 0
+    },
+    {
+      "source": "interconnects",
+      "n": 7,
+      "sent": 0,
+      "rejected": 2,
+      "expired": 3,
+      "stale": 0,
+      "duplicate": 0
+    },
+    {
+      "source": "microsoft_blog",
+      "n": 5,
+      "sent": 0,
+      "rejected": 4,
+      "expired": 0,
+      "stale": 1,
+      "duplicate": 0
+    },
+    {
+      "source": "gh_transformers",
+      "n": 3,
+      "sent": 0,
+      "rejected": 0,
+      "expired": 2,
+      "stale": 0,
+      "duplicate": 0
+    },
+    {
+      "source": "x_miner",
+      "n": 3,
+      "sent": 0,
+      "rejected": 1,
+      "expired": 0,
+      "stale": 1,
+      "duplicate": 1
+    },
+    {
+      "source": "gh_openwebui",
+      "n": 1,
+      "sent": 0,
+      "rejected": 1,
+      "expired": 0,
+      "stale": 0,
+      "duplicate": 0
+    },
+    {
+      "source": "hf_trending",
+      "n": 1,
+      "sent": 0,
+      "rejected": 0,
+      "expired": 0,
+      "stale": 0,
+      "duplicate": 0
+    }
+  ],
+  "rubrics": [
+    {
+      "rubric": null,
+      "n": 858,
+      "sent": 104
+    },
+    {
+      "rubric": "breakthrough",
+      "n": 367,
+      "sent": 22
+    },
+    {
+      "rubric": "career",
+      "n": 79,
+      "sent": 1
+    },
+    {
+      "rubric": "hardware",
+      "n": 299,
+      "sent": 3
+    },
+    {
+      "rubric": "industry",
+      "n": 1817,
+      "sent": 40
+    },
+    {
+      "rubric": "other",
+      "n": 5340,
+      "sent": 0
+    },
+    {
+      "rubric": "outage",
+      "n": 24,
+      "sent": 2
+    },
+    {
+      "rubric": "release",
+      "n": 722,
+      "sent": 53
+    },
+    {
+      "rubric": "safety",
+      "n": 2340,
+      "sent": 74
+    },
+    {
+      "rubric": "tool",
+      "n": 1019,
+      "sent": 46
+    },
+    {
+      "rubric": "viral",
+      "n": 80,
+      "sent": 11
+    }
+  ],
+  "feedback": [
+    {
+      "verdict": "bad",
+      "n": 17
+    },
+    {
+      "verdict": "good",
+      "n": 17
+    }
+  ],
+  "usage": [
+    {
+      "day": "2026-09-11",
+      "calls": 465,
+      "tokens_in": 396412,
+      "tokens_out": 68270
+    },
+    {
+      "day": "2026-09-12",
+      "calls": 295,
+      "tokens_in": 304838,
+      "tokens_out": 42276
+    },
+    {
+      "day": "2026-09-13",
+      "calls": 346,
+      "tokens_in": 1215535,
+      "tokens_out": 54886
+    },
+    {
+      "day": "2026-09-14",
+      "calls": 606,
+      "tokens_in": 2918522,
+      "tokens_out": 102142
+    },
+    {
+      "day": "2026-09-15",
+      "calls": 563,
+      "tokens_in": 2713037,
+      "tokens_out": 95531
+    },
+    {
+      "day": "2026-09-16",
+      "calls": 603,
+      "tokens_in": 2874508,
+      "tokens_out": 101970
+    },
+    {
+      "day": "2026-09-17",
+      "calls": 604,
+      "tokens_in": 2769311,
+      "tokens_out": 100313
+    },
+    {
+      "day": "2026-09-18",
+      "calls": 623,
+      "tokens_in": 2701442,
+      "tokens_out": 94938
+    },
+    {
+      "day": "2026-09-19",
+      "calls": 409,
+      "tokens_in": 1843071,
+      "tokens_out": 65177
+    },
+    {
+      "day": "2026-09-20",
+      "calls": 400,
+      "tokens_in": 1897311,
+      "tokens_out": 66365
+    },
+    {
+      "day": "2026-09-21",
+      "calls": 774,
+      "tokens_in": 3487518,
+      "tokens_out": 118944
+    },
+    {
+      "day": "2026-09-22",
+      "calls": 711,
+      "tokens_in": 3249538,
+      "tokens_out": 113392
+    },
+    {
+      "day": "2026-09-23",
+      "calls": 666,
+      "tokens_in": 3106110,
+      "tokens_out": 109838
+    },
+    {
+      "day": "2026-09-24",
+      "calls": 654,
+      "tokens_in": 2881428,
+      "tokens_out": 104852
+    },
+    {
+      "day": "2026-09-25",
+      "calls": 582,
+      "tokens_in": 2651780,
+      "tokens_out": 96954
+    },
+    {
+      "day": "2026-09-26",
+      "calls": 428,
+      "tokens_in": 1883711,
+      "tokens_out": 67839
+    },
+    {
+      "day": "2026-09-27",
+      "calls": 481,
+      "tokens_in": 2212725,
+      "tokens_out": 80466
+    },
+    {
+      "day": "2026-09-28",
+      "calls": 840,
+      "tokens_in": 3816026,
+      "tokens_out": 134263
+    },
+    {
+      "day": "2026-09-29",
+      "calls": 799,
+      "tokens_in": 3451508,
+      "tokens_out": 124714
+    },
+    {
+      "day": "2026-09-30",
+      "calls": 677,
+      "tokens_in": 3033290,
+      "tokens_out": 106672
+    },
+    {
+      "day": "2026-10-01",
+      "calls": 651,
+      "tokens_in": 3025312,
+      "tokens_out": 107962
+    },
+    {
+      "day": "2026-10-02",
+      "calls": 676,
+      "tokens_in": 3097510,
+      "tokens_out": 107440
+    },
+    {
+      "day": "2026-10-03",
+      "calls": 403,
+      "tokens_in": 1868296,
+      "tokens_out": 65496
+    },
+    {
+      "day": "2026-10-04",
+      "calls": 394,
+      "tokens_in": 1855329,
+      "tokens_out": 64261
+    },
+    {
+      "day": "2026-10-05",
+      "calls": 751,
+      "tokens_in": 3482948,
+      "tokens_out": 121399
+    },
+    {
+      "day": "2026-10-06",
+      "calls": 813,
+      "tokens_in": 3549479,
+      "tokens_out": 123343
+    },
+    {
+      "day": "2026-10-07",
+      "calls": 233,
+      "tokens_in": 1051487,
+      "tokens_out": 36814
+    }
+  ],
+  "unjudged": [
+    {
+      "status": "dropped",
+      "n": 348
+    },
+    {
+      "status": "duplicate",
+      "n": 37
+    },
+    {
+      "status": "expired",
+      "n": 7137
+    },
+    {
+      "status": "pending",
+      "n": 70
+    },
+    {
+      "status": "sent",
+      "n": 3
+    },
+    {
+      "status": "signal",
+      "n": 199
+    },
+    {
+      "status": "stale",
+      "n": 527
+    }
+  ],
+  "delivery_lag_minutes": {
+    "n": 359,
+    "min": -2706.483333333333,
+    "median": 60.38333333333333,
+    "max": 6579.233333333334
+  },
+  "rejected_by_editor_category": {
+    "other": 5638,
+    "tool": 354,
+    "research": 12,
+    "product": 19,
+    "policy": 148,
+    "business": 47,
+    "model": 2,
+    "industry": 834,
+    "breakthrough": 199,
+    "safety": 618,
+    "hardware": 193,
+    "release": 135,
+    "career": 66,
+    "outage": 2,
+    "viral": 16
+  },
+  "current_profile_delivery_lag_minutes": {
+    "from": "2026-09-14T00:00:00+00:00",
+    "n": 252,
+    "median": 66.425,
+    "max": 332.45
+  }
+}

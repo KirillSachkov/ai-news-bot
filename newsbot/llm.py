@@ -2,14 +2,14 @@
 
 Architecture note: the model is deliberately NOT applied to every fetched item.
 The free heuristic scorer (score.py) first ranks everything and cuts it down to
-a small shortlist; only that shortlist reaches the model. On our volumes that
-keeps the API usage inside the free grant on a new account (5M tokens) and at
-cents per month afterwards.
+a small shortlist; only that shortlist reaches the model. This bounds calls
+per cycle. Actual tokens are stored in llm_usage; monetary
+cost depends on the account and provider tariff.
 
 The model does not rate "importance" in the abstract. It is given the editorial
 profile (editorial.md: what the reference channels publish, what they never
-do, real posts as examples) and answers one question - would those channels
-take this item - plus writes the draft in their voice.
+do, real posts as examples) and asks whether this helps the operator, then
+writes a short draft.
 
 The wire format is OpenAI-compatible, so the request is plain JSON over urllib
 and the tool keeps its zero-dependency property. Everything degrades gracefully:
@@ -25,7 +25,7 @@ import re
 import time
 from datetime import datetime, timezone
 
-from .http import fetch
+from .http import fetch, remaining_timeout, retry_sleep, read_body
 
 DEFAULT_BASE_URL = "https://api.deepseek.com"
 DEFAULT_MODEL = "deepseek-flash"
@@ -39,21 +39,23 @@ DEFAULT_EDITORIAL = """Ориентир — русскоязычные Telegram-
 из мира разработки, крупные сделки, инциденты с ИИ-агентами. Не берут рекламу, анонсы
 мероприятий, корпоративные туториалы, патч-релизы, политику и войну."""
 
-SYSTEM_PROMPT = """Ты — шеф-редактор русскоязычного Telegram-канала про ИИ и разработку.
-Тебе приносят одну публикацию из источника. Реши, взяли бы её в ленту каналы-ориентиры,
-и если да — подготовь черновик поста в их стиле.
+SYSTEM_PROMPT = """Ты — редактор личной ленты Кирилла про ИИ и разработку.
+Тебе приносят одну публикацию. Оцени пользу для Кирилла по профилю ниже.
+Каналы-ориентиры помогают оценить подачу; практическая находка может пройти самостоятельно.
 
 {editorial}
 
 ## Шкала score — редакционный fit, 0–10
-9–10 — сюжет дня: об этом напишут оба канала (фронтир-релиз, сделка на миллиарды, громкий прорыв или инцидент).
+9–10 — сюжет дня (фронтир-релиз, сделка на миллиарды, громкий прорыв или инцидент).
 7–8 — уверенно в ленту: полезная находка с понятной выгодой, заметный релиз, история, которую будут пересказывать.
 5–6 — проходной: взяли бы только в пустой день (рядовой апдейт, нишевый инструмент, исследование без вау).
 3–4 — не формат (см. «Что каналы не берут»).
 0–2 — мимо: реклама, политика и война, старьё, мусор.
 
 ## Правила
-- Оценивай, будут ли об этом говорить айтишники, а не формальную важность события.
+- Оценивай конкретную возможность, приём или повод для обсуждения, полезный Кириллу.
+- Для авторского материала и небольшого проекта достаточно понятной задачи, способа применения и проверяемого результата. Массовый резонанс, известная компания и большое число звёзд не обязательны для score 7–8.
+- Практическая находка или авторский разбор за последние двое суток остаётся актуальным. Возраст репозитория сам по себе не определяет новизну возможности. Отделяй новое применение от пересказа старого релиза.
 - Имя крупной компании в заголовке ещё не новость: важно, что конкретно произошло.
 - Мало текста (голый заголовок, обрывок поста) — не повод занижать score: оцени само событие, если оно понятно из заголовка. Занижай, только если из текста нельзя понять, что произошло.
 - Не выдумывай факты, цифры, бенчмарки и цены: только то, что есть в тексте. Мало текста — пиши черновик коротко.
@@ -74,7 +76,11 @@ SYSTEM_PROMPT = """Ты — шеф-редактор русскоязычного
 USER_TEMPLATE = """Сегодня: {today}
 Источник: {source} ({group})
 Заголовок: {title}
-Найдено в источнике: {published}
+Дата публикации: {published}
+Найдено в источнике: {discovered}
+Основание актуальности: {freshness_basis}
+Измеренный рост интереса: {growth}
+Полнота контекста: {context_note}
 Текст: {summary}
 Ссылка: {url}
 """
@@ -203,7 +209,6 @@ class DeepSeek:
             (uid, json.dumps(verdict, ensure_ascii=False), _now().isoformat(),
              tokens_in, tokens_out))
         self.store.db.commit()
-        self.record_usage(tokens_in, tokens_out)
 
     def record_usage(self, tokens_in=0, tokens_out=0):
         if self.store is None:
@@ -268,27 +273,31 @@ class DeepSeek:
         last_error = None
         for attempt in range(3):
             try:
-                with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                    body = json.loads(response.read().decode("utf-8", "replace"))
+                with urllib.request.urlopen(request, timeout=remaining_timeout(self.timeout)) as response:
+                    body = json.loads(read_body(response, self.timeout).decode("utf-8", "replace"))
                 usage = body.get("usage") or {}
                 content = (body.get("choices") or [{}])[0].get("message", {}).get("content", "")
+                self.record_usage(int(usage.get("prompt_tokens") or 0),
+                                  int(usage.get("completion_tokens") or 0))
                 return content, int(usage.get("prompt_tokens") or 0), \
                     int(usage.get("completion_tokens") or 0)
             except urllib.error.HTTPError as exc:
                 detail = ""
                 try:
-                    detail = exc.read().decode("utf-8", "replace")[:200]
+                    detail = read_body(exc, self.timeout, limit=4096).decode("utf-8", "replace")[:200]
                 except Exception:
                     pass
+                finally:
+                    exc.close()
                 last_error = "HTTP %s %s" % (exc.code, detail)
                 if exc.code in (429, 500, 502, 503) and attempt < 2:
-                    time.sleep(2 * (attempt + 1))
+                    retry_sleep(2 * (attempt + 1))
                     continue
                 raise LLMError(last_error)
             except Exception as exc:
                 last_error = "%s: %s" % (type(exc).__name__, exc)
                 if attempt < 2:
-                    time.sleep(2 * (attempt + 1))
+                    retry_sleep(2 * (attempt + 1))
                     continue
         raise LLMError(last_error or "unknown error")
 
@@ -320,7 +329,15 @@ class DeepSeek:
             today=_now().strftime("%Y-%m-%d"),
             source=item.get("source", ""), group=group or item.get("source_group", ""),
             title=item.get("title", ""), published=item.get("published") or "n/a",
+            discovered=(item.get("extra") or {}).get("freshness_at") or item.get("discovered") or "n/a",
+            freshness_basis=(item.get("extra") or {}).get("freshness_basis") or "publication",
+            growth=("+%s за %s ч" % ((item.get("extra") or {}).get("growth_delta"),
+                                   (item.get("extra") or {}).get("growth_hours")))
+                   if (item.get("extra") or {}).get("growth_delta") else "не измерен",
             summary=(item.get("summary") or "")[:1200],
+            context_note=("Текст поста сокращён; не домысливай отсутствующие подробности."
+                          if (item.get("extra") or {}).get("summary_truncated")
+                          else "Доступное описание источника; полного материала может не быть."),
             url=item.get("url") or "",
         )
         content, tokens_in, tokens_out = self._chat([
@@ -360,15 +377,21 @@ class DeepSeek:
             {"role": "system", "content": SAME_STORY_PROMPT},
             {"role": "user", "content": prompt},
         ])
-        self.record_usage(tokens_in, tokens_out)
-        data = _loads_loose(content) or {}
-        try:
-            position = int(data.get("duplicate_of"))
-        except (TypeError, ValueError):
+        data = _loads_loose(content)
+        if not isinstance(data, dict) or "duplicate_of" not in data:
+            raise LLMError("model returned invalid repeat check JSON")
+        answer = data["duplicate_of"]
+        if answer is None:
             return None
+        try:
+            if isinstance(answer, bool) or not isinstance(answer, (int, str)):
+                raise ValueError()
+            position = int(answer)
+        except (TypeError, ValueError):
+            raise LLMError("model returned invalid repeat index")
         if 1 <= position <= len(shown):
             return position - 1
-        return None
+        raise LLMError("model returned repeat index outside shown list")
 
 
 def normalize_verdict(verdict):

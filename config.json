@@ -91,5 +91,9 @@
       "инструмент для разработ"
     ],
     "boost_bonus": 0.8
-  }
+  },
+  "practical_llm_slots": 3,
+  "practical_min_heuristic": 2.5,
+  "llm_cycle_budget_seconds": 35,
+  "future_tolerance_minutes": 15
 }

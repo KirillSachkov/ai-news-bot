@@ -161,7 +161,34 @@ def cmd_check(args):
 
 
 def cmd_once(args):
+    if args.dry_run and not getattr(args, "_snapshot_done", False):
+        import copy
+        import sqlite3
+        import tempfile
+        from contextlib import closing
+        # Collection/reranking mutate scores, caches, validators and statuses.
+        # Snapshot before build() so even schema migrations touch only the copy.
+        original_db = paths(args)[2]
+        with tempfile.TemporaryDirectory(prefix="newsbot-dry-") as directory:
+            isolated = copy.copy(args)
+            isolated.db = os.path.join(directory, "news.db")
+            isolated._snapshot_done = True
+            if os.path.isfile(original_db):
+                with closing(sqlite3.connect("file:%s?mode=ro" % original_db, uri=True)) as source:
+                    with closing(sqlite3.connect(isolated.db)) as target:
+                        source.backup(target)
+            return cmd_once(isolated)
     sources, cfg, store, tg, llm = build(args, need_telegram=not args.dry_run)
+    try:
+        return _once_built(args, sources, cfg, store, tg, llm)
+    finally:
+        store.close()
+
+
+def _once_built(args, sources, cfg, store, tg, llm):
+    offline = getattr(args, "offline", False)
+    if offline and not args.dry_run:
+        raise SystemExit("--offline requires --dry-run")
     if not args.dry_run and not store.kv_get("chat_id"):
         raise SystemExit("chat_id is unknown — send /start to the bot, run whoami")
 
@@ -175,11 +202,15 @@ def cmd_once(args):
             for name, error in list(stats["errors"].items())[:10]:
                 print("  error %s: %s" % (name, error))
     print("scoring…")
-    rank = pipeline.rerank_pending(store, sources, cfg, llm, verbose=True)
+    rank = pipeline.rerank_pending(store, sources, cfg, None if offline else llm, verbose=True)
     print("scanned=%d judged=%d llm_calls=%d" % (
         rank["scanned"], rank["judged"], rank["llm_calls"]))
 
     if args.dry_run:
+        from types import SimpleNamespace
+        preview_editor = llm
+        if offline and cfg.get("require_verdict", True):
+            preview_editor = SimpleNamespace(enabled=True, profile_tag=llm.profile_tag)
         references = pipeline.reference_channels(sources)
         pending = store.pending(limit=200)
         pending.sort(key=lambda r: pipeline.effective_score(r, store, cfg, references=references),
@@ -196,7 +227,7 @@ def cmd_once(args):
             mark = "BREAK" if breaking else "     "
             print("\n%s %.2f  [%s] %s" % (mark, value, row["source"], row["title"][:88]))
             if verdict:
-                outdated = " (old profile)" if llm.enabled and pipeline.needs_judgement(verdict, llm) else ""
+                outdated = " (old profile)" if pipeline.needs_judgement(verdict, preview_editor) else ""
                 print("        fit: %s %s / %s%s — %s" % (
                     verdict.get("score"), verdict.get("rubric") or verdict.get("category"),
                     verdict.get("channel") or "-", outdated, (verdict.get("reason") or "")[:70]))
@@ -207,7 +238,7 @@ def cmd_once(args):
             print("        %s" % (row.get("url") or ""))
         print("\n(candidates above)")
         print("\n=== would be sent RIGHT NOW (budget + dedupe applied, nothing marked) ===")
-        selection = pipeline.select_due(store, sources, cfg, force=True, dry=True, llm=llm)
+        selection = pipeline.select_due(store, sources, cfg, force=False, dry=True, llm=preview_editor)
         if not selection:
             print("  (nothing above the threshold right now)")
         for value, breaking, row in selection:
@@ -375,8 +406,8 @@ def cmd_xdiag(args):
     print("\nЧТО ДЕЛАТЬ:")
     print(" 1. xcancel: одно письмо на rss@xcancel.com — попросить вайтлисту ридера,")
     print("    приложив ID выше. Дальше это обычный стабильный RSS-маршрут.")
-    print(" 2. twiiit: работает, но режет по IP при частых запросах — держим паузу")
-    print("    x_politeness_delay_seconds и cooldown на маршрут.")
+    print(" 2. twiiit удалён: маршрут не отдавал рабочую ленту. Доступ xcancel нужно")
+    print("    проверить из текущей сети; HTTP 451 означает ограничение доступа.")
     print(" 3. x_miner: ссылки на посты X ищутся в уже скачанных страницах Telegram —")
     print("    запросов к X ноль. Смотреть: python3 bot.py stats")
     return 0
@@ -423,6 +454,7 @@ def main(argv=None):
 
     p = sub.add_parser("once", help="one cycle then exit")
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--offline", action="store_true", help="dry-run without model calls or charges")
     p.add_argument("--no-fetch", action="store_true",
                    help="skip fetching, only re-score and select")
     p.add_argument("--top", type=int, default=12)

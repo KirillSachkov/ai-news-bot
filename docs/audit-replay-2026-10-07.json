@@ -1,0 +1,77 @@
+{
+  "before": {
+    "evaluated_at": "2026-10-07T10:55:00+00:00",
+    "stats": {
+      "sources": 52,
+      "ok": 48,
+      "failed": 4,
+      "fetched": 856,
+      "new": 55,
+      "errors": {
+        "x_openai": "xcancel: cooling down after a block",
+        "x_anthropic": "xcancel: cooling down after a block",
+        "x_googledeepmind": "xcancel: cooling down after a block",
+        "x_huggingface": "xcancel: cooling down after a block"
+      },
+      "skipped_unchanged": 0
+    },
+    "added_by_source": {
+      "techmeme": 2,
+      "hn_front": 1,
+      "hn_show": 1,
+      "gh_llamacpp": 1,
+      "gnews_ai_en": 22,
+      "gnews_ai_ru": 20,
+      "habr_news": 2,
+      "tg_codecamp": 2,
+      "tg_data_secrets": 2,
+      "tg_crypto_essay": 2
+    },
+    "model_calls": 0,
+    "telegram_calls": 0
+  },
+  "after": {
+    "evaluated_at": "2026-10-07T10:55:00+00:00",
+    "stats": {
+      "sources": 64,
+      "ok": 59,
+      "failed": 5,
+      "fetched": 997,
+      "new": 85,
+      "errors": {
+        "x_openai": "xcancel: cooling down after a block",
+        "x_anthropic": "xcancel: cooling down after a block",
+        "x_googledeepmind": "xcancel: cooling down after a block",
+        "x_huggingface": "xcancel: cooling down after a block",
+        "reddit_claudeai": "HTTP 429"
+      },
+      "skipped_unchanged": 0,
+      "cooldown": 0,
+      "old": 672,
+      "seen": 240,
+      "undated": 0
+    },
+    "added_by_source": {
+      "techmeme": 2,
+      "hn_front": 1,
+      "hn_show": 1,
+      "hf_trending": 15,
+      "gh_llamacpp": 1,
+      "gnews_ai_en": 22,
+      "gnews_ai_ru": 20,
+      "habr_news": 2,
+      "tg_codecamp": 2,
+      "tg_data_secrets": 2,
+      "tg_crypto_essay": 2,
+      "armin_blog": 1,
+      "tg_metarhia": 1,
+      "gh_claude_code": 3,
+      "matt_aihero": 2,
+      "timur_youtube": 1,
+      "x_html_hamelhusain": 3,
+      "x_html_mattpocockuk": 4
+    },
+    "model_calls": 0,
+    "telegram_calls": 0
+  }
+}

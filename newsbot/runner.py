@@ -21,6 +21,7 @@ from __future__ import annotations
 import threading
 import time
 import traceback
+import queue
 from datetime import datetime, timedelta, timezone
 
 from . import pipeline, render
@@ -56,6 +57,10 @@ class Runner:
         self._fetch_lock = threading.Lock()
         self.next_fetch = 0.0
         self.next_fast = 0.0
+        self._wake = threading.Event()
+        self._digest_requested = threading.Event()
+        self._digest_busy = False
+        self._results = queue.Queue()
 
     # ------------------------------------------------------------------ utils
     def log(self, message):
@@ -93,9 +98,14 @@ class Runner:
         with self._fetch_lock:
             started = time.time()
             stats = pipeline.collect(store, sources, self.cfg, verbose=False)
-            pipeline.rerank_pending(store, self.sources, self.cfg, self.llm,
-                                    verbose=False, fast=fast)
+            rank = pipeline.rerank_pending(store, self.sources, self.cfg, self.llm,
+                                           verbose=False, fast=fast)
+            stats["editor"] = rank
             took = time.time() - started
+            stats["seconds"] = round(took, 2)
+            stats["overdue_fast"] = took > float(self.cfg.get("fast_interval_seconds", 90))
+            store.record_collection(datetime.fromtimestamp(started, timezone.utc).isoformat(timespec="seconds"),
+                                    label, stats)
         if stats["new"] or stats["failed"]:
             self.log("%s: new=%d ok=%d failed=%d unchanged=%d (%.1fs)"
                      % (label, stats["new"], stats["ok"], stats["failed"],
@@ -113,10 +123,16 @@ class Runner:
         while not self._stop.is_set():
             try:
                 now = time.time()
-                if now >= self.next_fetch:
+                if self._digest_requested.is_set():
+                    self._digest_requested.clear()
+                    stats = self._collect(store, self.sources, "digest")
+                    self._results.put(("digest", stats))
+                    self.next_fetch = time.time() + full_interval
+                elif now >= self.next_fetch:
                     self.next_fetch = now + full_interval
                     self.next_fast = now + fast_interval
                     self._collect(store, self.sources, "full fetch")
+                    self._results.put(("full", self._last_stats))
                     store.expire_pending(float(self.cfg.get("queue_ttl_hours", 6)))
                     store.prune_stories()
                 elif fast and now >= self.next_fast:
@@ -124,15 +140,18 @@ class Runner:
                     self._collect(store, fast, "fast lane", fast=True)
             except Exception:
                 self.log("fetch worker error:\n%s" % traceback.format_exc())
+                if self._digest_busy:
+                    self._results.put(("digest_error", None))
                 self._stop.wait(30)
-            self._stop.wait(2)
+            self._wake.wait(2)
+            self._wake.clear()
 
     def start_worker(self):
         # Schedule the first cycles before the thread exists, or the worker
         # would start a full sweep at the same moment as the opening blocking
         # one and both would crawl the same 50 sources.
         now = time.time()
-        self.next_fetch = now + float(self.cfg.get("fetch_interval_seconds", 900))
+        self.next_fetch = 0.0  # Initial full sweep also belongs to the worker.
         self.next_fast = now + float(self.cfg.get("fast_interval_seconds", 90))
         self._worker = threading.Thread(target=self._worker_loop,
                                         name="fetch", daemon=True)
@@ -142,6 +161,26 @@ class Runner:
         """Blocking collection, for /digest and the first run only."""
         return self._collect(self._worker_store or self.store, self.sources,
                              "fetch on demand")
+
+    def finish_collections(self):
+        """Only the Telegram thread sends replies, including async /digest."""
+        while True:
+            try:
+                label, stats = self._results.get_nowait()
+            except queue.Empty:
+                return
+            if self.chat_id and stats and not self.is_paused():
+                pipeline.bootstrap(self.store, self.tg, self.chat_id, self.sources,
+                                   stats, self.cfg, verbose=self.verbose, llm=self.llm)
+            if label.startswith("digest"):
+                self._digest_busy = False
+                if label == "digest_error":
+                    self.tg.send_message(self.chat_id, "Сбор завершился ошибкой. Проверю источники в следующем обходе.")
+                elif self.is_paused():
+                    self.tg.send_message(self.chat_id, "Сбор завершён. Доставка на паузе; /resume снимет её.")
+                elif not self.maybe_deliver(force=True):
+                    self.tg.send_message(self.chat_id, "Сбор завершён: новых записей %s. Сейчас нет кандидата для отправки; причины — /status."
+                                         % (stats or {}).get("new", 0))
 
     # -------------------------------------------------------------- delivering
     def maybe_deliver(self, force=False):
@@ -205,9 +244,10 @@ class Runner:
             self.tg.send_message(chat_id, "Привет. Я присылаю новости по ИИ и разработке.\n\n" + HELP)
         elif command == "/status":
             self.tg.send_message(chat_id, render.status_text(self.store, self.cfg, chat_id,
-                                                             fast=len(self.fast_sources())))
+                                                             fast=len(self.fast_sources()), sources=self.sources))
         elif command == "/sources":
-            self.tg.send_message(chat_id, render.sources_text(self.store, self.sources))
+            for part in render.message_parts(render.sources_text(self.store, self.sources)):
+                self.tg.send_message(chat_id, part)
         elif command == "/last":
             rows = self.store.recent_sent(10)
             if not rows:
@@ -219,13 +259,13 @@ class Runner:
                         chat_id, render.item_card(row, verdict=verdict),
                         keyboard=render.feedback_keyboard(row["nid"], row.get("url")))
         elif command == "/digest":
-            self.tg.send_message(chat_id, "Собираю свежее…")
-            stats = self.fetch_now()
-            sent = self.maybe_deliver(force=True)
-            if not sent:
-                self.tg.send_message(
-                    chat_id, "Нового выше порога за последние %s ч нет. Собрал записей: %s."
-                    % (self.cfg.get("max_age_hours", 6), (stats or {}).get("fetched", 0)))
+            if self._digest_busy:
+                self.tg.send_message(chat_id, "Сбор уже запрошен. Сообщу результат.")
+            else:
+                self._digest_busy = True
+                self._digest_requested.set()
+                self._wake.set()
+                self.tg.send_message(chat_id, "Собираю свежее… Команды и оценки доступны.")
         elif command == "/pause":
             self.store.kv_set("paused", "1")
             self.tg.send_message(chat_id, "Пауза. /resume чтобы возобновить.")
@@ -238,7 +278,9 @@ class Runner:
             hours = 2.0
             if len(parts) > 1:
                 try:
-                    hours = max(0.05, float(parts[1].replace(",", ".")))
+                    import math
+                    hours = float(parts[1].replace(",", "."))
+                    hours = max(0.05, min(168, hours)) if math.isfinite(hours) else 2.0
                 except ValueError:
                     hours = 2.0
             until = (datetime.now(timezone.utc) + timedelta(hours=hours)).isoformat(timespec="seconds")
@@ -253,11 +295,11 @@ class Runner:
         message = callback.get("message") or {}
         chat_id = (message.get("chat") or {}).get("id")
         message_id = message.get("message_id")
-        if chat_id and not self._authorized(chat_id):
+        if not chat_id or not self._authorized(chat_id):
             self.tg.answer_callback(callback_id, "Это личный бот.")
             return
         parts = data.split("|")
-        if len(parts) != 3 or parts[0] != "fb":
+        if len(parts) != 3 or parts[0] != "fb" or parts[1] not in ("g", "b"):
             self.tg.answer_callback(callback_id, "Не понял команду")
             return
         verdict = "good" if parts[1] == "g" else "bad"
@@ -268,7 +310,7 @@ class Runner:
             return
 
         row = self.store.item(nid)
-        if not row:
+        if not row or row.get("status") != "sent":
             self.tg.answer_callback(callback_id, "Новость не найдена")
             return
         if row.get("feedback"):
@@ -287,9 +329,10 @@ class Runner:
 
         # learn: nudge this source and the terms the model/heuristic reacted to
         delta = 0.25 if verdict == "good" else -0.35
-        self.store.bump_weight("source", row["source"], delta)
-        for term in keywords[:8]:
-            self.store.bump_weight("kw", term, delta * 0.6)
+        if self.cfg.get("learning", True):
+            self.store.bump_weight("source", row["source"], delta)
+            for term in keywords[:8]:
+                self.store.bump_weight("kw", term, delta * 0.6)
 
         self.tg.answer_callback(
             callback_id, "Спасибо, учёл" if verdict == "good" else "Понял, буду резать такое")
@@ -346,16 +389,13 @@ class Runner:
         # One blocking sweep first, so /digest-worthy state exists immediately
         # and bootstrap has real numbers; the worker takes over after that.
         self._worker_store = Store(self.store.path)
-        stats = self.fetch_now()
         self.start_worker()
-        if stats and self.chat_id:
-            pipeline.bootstrap(self.store, self.tg, self.chat_id, self.sources,
-                               stats, self.cfg, verbose=self.verbose, llm=self.llm)
         try:
             while True:
                 # Separate guards: a card that fails to render or send must not
                 # also make the bot deaf to /pause and the rating buttons.
                 try:
+                    self.finish_collections()
                     self.maybe_deliver()
                 except KeyboardInterrupt:
                     raise
@@ -372,5 +412,6 @@ class Runner:
             self.log("stopped by user")
         finally:
             self._stop.set()
+            self._wake.set()
             if self._worker:
                 self._worker.join(timeout=5)

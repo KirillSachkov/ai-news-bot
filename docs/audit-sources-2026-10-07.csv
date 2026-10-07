@@ -1,0 +1,69 @@
+name,type,enabled,seconds,count,newest,undated,last6h,last24h,unseen6h,error,classification
+openai_news,rss,True,0.18,40,2026-10-06T16:00:00+00:00,0,0,3,0,,accessible_recent
+deepmind_blog,rss,True,0.16,30,2026-10-06T19:57:04+00:00,0,0,1,0,,accessible_recent
+hf_blog,rss,True,0.26,30,2026-10-06T06:44:39+00:00,0,0,0,0,,accessible_quiet
+google_ai_blog,rss,True,0.63,20,2026-10-02T15:00:00+00:00,0,0,0,0,,accessible_quiet
+microsoft_blog,rss,True,0.65,10,2026-10-01T15:03:27+00:00,0,0,0,0,,accessible_quiet
+nvidia_blog,rss,True,0.36,18,2026-10-06T13:00:19+00:00,0,0,1,0,,accessible_recent
+aws_ml,rss,True,0.36,20,2026-10-06T19:19:15+00:00,0,0,5,0,,accessible_recent
+the_decoder,rss,True,0.68,10,2026-10-07T08:54:43+00:00,0,1,10,0,,accessible_recent
+techcrunch_ai,rss,True,0.16,18,2026-10-06T22:34:03+00:00,0,0,11,0,,accessible_recent
+techmeme,rss,True,1.36,15,2026-10-07T10:45:03+00:00,0,11,15,2,,accessible_recent
+verge_ai,rss,True,0.16,10,2026-10-07T09:00:00+00:00,0,1,4,0,,accessible_recent
+arstechnica,rss,True,0.21,20,2026-10-06T21:31:10+00:00,0,0,15,0,,accessible_recent
+venturebeat_ai,rss,False,6.36,0,,0,0,0,0,HTTP 429,error
+marktechpost,rss,True,0.13,10,2026-10-07T06:29:14+00:00,0,1,4,0,,accessible_recent
+simonwillison,rss,True,0.33,25,2026-10-07T04:47:55+00:00,0,0,11,0,,accessible_recent
+interconnects,rss,True,0.13,20,2026-10-06T14:22:41+00:00,0,0,1,0,,accessible_recent
+latent_space,rss,True,0.51,20,2026-10-07T04:55:44+00:00,0,0,1,0,,accessible_recent
+alignment_forum,rss,True,0.21,10,2026-10-01T16:20:56+00:00,0,0,0,0,,accessible_quiet
+hn_front,hn_front_page,True,0.45,25,2026-10-07T09:51:43+00:00,0,3,23,1,,accessible_recent
+hn_show,hn_show,True,0.39,20,2026-10-07T10:33:48+00:00,0,20,20,2,,accessible_recent
+hf_trending,hf_trending_models,True,0.22,15,2026-10-02T05:54:02+00:00,0,0,0,0,,accessible_quiet
+hf_papers,hf_daily_papers,True,0.25,20,2026-10-06T00:00:00+00:00,0,0,0,0,,accessible_quiet
+arxiv_cs_ai,rss,True,0.48,25,2026-10-07T04:00:00+00:00,0,0,25,0,,accessible_recent
+arxiv_cs_cl,rss,True,0.55,25,2026-10-07T04:00:00+00:00,0,0,25,0,,accessible_recent
+arxiv_cs_lg,rss,True,0.6,25,2026-10-07T04:00:00+00:00,0,0,25,0,,accessible_recent
+gh_vllm,rss,True,1.67,10,2026-10-06T18:52:05+00:00,0,0,1,0,,accessible_recent
+gh_ollama,rss,True,0.5,10,2026-10-06T18:47:10+00:00,0,0,2,0,,accessible_recent
+gh_llamacpp,rss,True,0.98,10,2026-10-07T10:43:04+00:00,0,6,8,1,,accessible_recent
+gh_transformers,rss,True,1.71,10,2026-10-06T16:39:23+00:00,0,0,1,0,,accessible_recent
+gh_openwebui,rss,True,1.64,10,2026-09-21T19:25:21+00:00,0,0,0,0,,accessible_quiet
+gh_comfyui,rss,True,0.99,10,2026-10-06T18:49:02+00:00,0,0,1,0,,accessible_recent
+gnews_ai_en,rss,True,0.08,40,2026-10-07T10:52:51+00:00,0,40,40,22,,accessible_recent
+gnews_ai_ru,rss,True,0.55,40,2026-10-07T10:54:08+00:00,0,40,40,20,,accessible_recent
+habr_news,rss,True,0.33,30,2026-10-07T10:43:29+00:00,0,27,30,2,,accessible_recent
+tg_codecamp,telegram_web,True,0.29,15,2026-10-07T10:47:30+00:00,0,2,4,2,,accessible_recent
+tg_data_secrets,telegram_web,True,0.38,15,2026-10-07T10:37:18+00:00,0,4,10,2,,accessible_recent
+tg_ai_newz,telegram_web,True,0.32,13,2026-10-07T08:09:52+00:00,0,1,2,0,,accessible_recent
+tg_seeallochnaya,telegram_web,True,0.41,15,2026-10-07T00:39:37+00:00,0,0,1,0,,accessible_recent
+x_miner,x_miner,True,0.01,0,,0,0,0,0,,accessible_quiet
+x_openai,x_user,True,0.0,0,,0,0,0,0,xcancel: cooling down after a block,error
+x_anthropic,x_user,True,0.0,0,,0,0,0,0,xcancel: cooling down after a block,error
+x_googledeepmind,x_user,True,0.0,0,,0,0,0,0,xcancel: cooling down after a block,error
+x_huggingface,x_user,True,0.0,0,,0,0,0,0,xcancel: cooling down after a block,error
+bsky_karpathy,bsky_user,False,0.23,10,2023-05-27T03:56:08.230Z,0,0,0,0,,accessible_quiet
+bsky_emollick,bsky_user,True,0.78,10,2026-10-07T06:28:56.559Z,0,1,3,0,,accessible_recent
+bsky_natolambert,bsky_user,True,0.27,10,2026-10-06T14:26:48.703Z,0,0,1,0,,accessible_recent
+bsky_arankomatsuzaki,bsky_user,False,0.54,1,2024-12-17T19:04:08.314Z,0,0,0,0,,accessible_quiet
+bsky_theverge,bsky_user,True,0.54,8,2026-10-07T10:05:37.760529Z,0,2,8,0,,accessible_recent
+bsky_techcrunch,bsky_user,True,0.05,10,2026-10-07T07:05:29Z,0,1,10,0,,accessible_recent
+bsky_microsoft,bsky_user,False,0.51,2,2025-02-19T16:02:49.287Z,0,0,0,0,,accessible_quiet
+bsky_github,bsky_user,True,0.53,9,2026-10-06T20:30:04.319617607Z,0,0,1,0,,accessible_recent
+reddit_localllama,rss,True,1.0,25,2026-10-07T09:26:05+00:00,0,6,23,0,,accessible_recent
+lobsters_ai,rss,True,0.4,20,2026-10-07T09:45:45+00:00,0,1,2,1,,accessible_recent
+qwen_blog,rss,True,0.19,20,2025-09-22T20:00:00+00:00,0,0,0,0,,accessible_quiet
+tg_crypto_essay,telegram_web,True,0.28,15,2026-10-07T10:51:48+00:00,0,2,2,2,,accessible_recent
+github_rising,github_rising,True,0.7,20,2026-10-06T21:47:02+00:00,0,0,1,0,,accessible_recent
+armin_blog,rss,True,0.22,10,2026-10-06T00:00:00+00:00,0,0,0,0,,accessible_quiet
+hamel_blog,rss,True,0.42,20,2026-09-30T07:00:00+00:00,0,0,0,0,,accessible_quiet
+matt_youtube,rss,True,0.07,15,2026-10-05T10:50:24+00:00,0,0,0,0,,accessible_quiet
+tg_metarhia,telegram_web,True,0.26,16,2026-10-06T05:22:01+00:00,0,0,0,0,,accessible_quiet
+gh_claude_code,rss,True,0.54,10,2026-10-06T18:59:30+00:00,0,0,1,0,,accessible_recent
+gh_uv,rss,True,1.04,10,2026-10-03T17:34:11+00:00,0,0,0,0,,accessible_quiet
+reddit_claudeai,rss,True,6.99,0,,0,0,0,0,HTTP 429,error
+matt_aihero,rss,True,0.26,30,2026-10-05T11:01:07+00:00,0,0,0,0,,accessible_quiet
+timur_youtube,rss,True,0.09,15,2026-10-06T10:00:07+00:00,0,0,0,0,,accessible_quiet
+x_html_karpathy,x_html,True,1.02,5,2026-10-02T06:35:51+00:00,0,0,0,0,,accessible_quiet
+x_html_hamelhusain,x_html,True,0.55,5,2026-10-07T05:06:48+00:00,0,1,2,1,,accessible_recent
+x_html_mattpocockuk,x_html,True,1.12,5,2026-10-07T08:27:58+00:00,0,1,4,1,,accessible_recent

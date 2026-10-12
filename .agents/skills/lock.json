@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "skills": {
+    "orchestrate": {
+      "path": ".agents/skills/orchestrate/SKILL.md",
+      "sha256": "0b4c7fda4727eff31799e801d7e63e341517792a70f69c08100910c8d54f53f3",
+      "owner": "project",
+      "adapted": false
+    }
+  }
+}

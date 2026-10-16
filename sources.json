@@ -1,6 +1,16 @@
 {
   "sources": [
     {
+      "name": "claude_dev",
+      "type": "rss",
+      "group": "ai_lab",
+      "weight": 1.5,
+      "url": "https://claude.dev/rss.xml",
+      "limit": 30,
+      "editorial_lane": "practical",
+      "freshness_hours": 48
+    },
+    {
       "name": "openai_news",
       "type": "rss",
       "group": "ai_lab",

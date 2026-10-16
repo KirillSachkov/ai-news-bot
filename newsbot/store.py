@@ -137,7 +137,7 @@ MIGRATIONS = (
 )
 
 _TRACKING_PARAMS = re.compile(
-    r"^(utm_|fbclid|gclid|yclid|mc_cid|mc_eid|igshid|ref|ref_src|source|"
+    r"^(utm_.*|fbclid|gclid|yclid|mc_cid|mc_eid|igshid|ref|ref_src|source|"
     r"cmpid|ocid|spm|si|s|t|at_medium|at_campaign)$",
     re.I,
 )

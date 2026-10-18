@@ -6,5 +6,8 @@ Read [README.md](README.md) for product behaviour. For collection, scoring or de
 also read [the audit](docs/audit-2026-10-07.md) and the affected tests.
 
 Use the installed [implement-spec](.agents/skills/implement-spec/SKILL.md) when the owner explicitly
-assigns specification or task-set execution through that skill. Preparation and status requests do not dispatch work.
-Preserve manual invocation boundaries; installing a skill does not invoke it.
+assigns execution of a whole specification or task set, including a natural-language request such as
+"implement this specification"; naming the skill is sufficient but not required. Preparation, discussion
+and status requests do not dispatch work. Installing a skill does not invoke it.
+For independent session handoff, assigned coordination and editorial work, follow
+[the project routes](docs/agent-workflow.md#session-handoff-and-coordination).

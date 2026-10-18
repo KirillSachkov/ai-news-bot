@@ -18,10 +18,29 @@ Native subagents may review read-only.
 Use the current runtime and inherit its agent/model unless the owner selected another.
 Cloud tasks must verify their own required access before dependent work.
 
+## Session handoff and coordination
+
+A request to launch work in another session assigns execution to that destination only.
+Deliver the assignment, verify receipt and report the session location; that completes launch,
+including startup recovery. The resulting owner/project session is independent. Ongoing prompts,
+answering its questions, result acceptance and closure require an owner coordination assignment.
+Record the assigned tasks/sessions, lead and responsibilities in the task record and private handoff.
+Monitor-only scope permits observation and reporting; direction and acceptance require their own scope.
+Repository membership and session creation confer no management authority. Preserve foreign sessions,
+results and resources; cleanup covers owned resources only after evidence and live-worker checks.
+
+## Editorial and engineering routes
+
+Ordinary writing, editing, research and material review use editorial judgement against
+[the editorial profile](../editorial.md) and author acceptance, with existing publication gates.
+The engineering workflow below applies to software/tooling changes or an explicitly assigned
+implementation workflow. Discussing or selecting a content plan does not assign its production.
+
 ## Execution and review
 
-For owner-assigned specification execution through [implement-spec](../.agents/skills/implement-spec/SKILL.md),
-apply the project adaptations below. Preparing a specification or tasks does not dispatch work.
+For explicit whole-specification or task-set execution, use [implement-spec](../.agents/skills/implement-spec/SKILL.md)
+and apply the project adaptations below. Natural-language assignments suffice; preparing or discussing
+a specification or tasks does not dispatch work.
 Restore valid results and actual active worker state on resumption. Keep decisions, dependencies,
 resource ownership, checked commits and next actions in the assigned Issue or PR; keep private
 worker identifiers in the local handoff.
@@ -45,7 +64,7 @@ Ask about business decisions and explicit gates; continue independent work while
 
 ## Verification
 
-Run from the repository root:
+For software/tooling changes, including harness instructions, run from the repository root:
 
 ```bash
 python3 -m unittest discover -s tests
@@ -64,7 +83,7 @@ A repository merge alone does not authorize these actions.
 
 ## Delivery and reporting
 
-Deliver through a scoped branch and PR after required checks and independent review.
+Deliver software/tooling changes through a scoped branch and PR after required checks and independent review.
 Complete commit, push, merge and task resolution only within the owner's authorized scope.
 Respect any task-specific gate. Verify the merged tree and preserve evidence before cleaning up
 owned branches or workers; confirm no live worker still needs them. Deployment is a separate stage

@@ -3,11 +3,11 @@
   "skills": {
     "implement-spec": {
       "path": ".agents/skills/implement-spec/SKILL.md",
-      "sha256": "cd5ba121315169b11eb9d7c56a4a3ddf4378331cab6292ad840cd78f015280ca",
+      "sha256": "f6219d1993fa443122fef8748a09e085038895233b7d5dfbe7bdad4b2509927d",
       "owner": "project",
       "adapted": false,
       "files": {
-        "SKILL.md": "cd5ba121315169b11eb9d7c56a4a3ddf4378331cab6292ad840cd78f015280ca",
+        "SKILL.md": "f6219d1993fa443122fef8748a09e085038895233b7d5dfbe7bdad4b2509927d",
         "agents/openai.yaml": "b0d1340b987edddd09d2ebd0207e08c78a95c4aadc7966919b46eefbf1338258"
       }
     },

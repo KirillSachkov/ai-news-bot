@@ -97,8 +97,8 @@ CI, merge and deployment. A worker completion message or a closed Issue alone do
 
 Canonical installed skills are regular project-owned files under `.agents/skills/`; `.claude/skills`
 links to that directory for Claude discovery. Root `AGENTS.md` is the owner-maintained instruction entry.
-The selected set is `implement-spec`, `tdd`, `code-review`, `classify-change` and
-`setup-matt-pocock-skills`, including their references and native metadata. Preserve manual invocation
+The selected set is `implement`, `implement-spec`, `tdd`, `code-review`, `classify-change` and
+`setup-matt-pocock-skills`, including their references and native metadata. Preserve approved invocation
 metadata in `SKILL.md` and `agents/openai.yaml`. Installation does not invoke interactive setup.
 
 Maintain all installed file hashes in [the skill lock](../.agents/skills/lock.json).
@@ -109,8 +109,7 @@ uses the declaration in that root workflow; installing shared mechanics does not
 This installation provides local discovery; cloud execution readiness still requires verification
 in the cloud runtime.
 
-The installed `implement-spec` retains this project's explicit whole-specification route and manual
-invocation metadata. It applies the fresh-worker-context update while retaining its self-contained
-per-ticket execution steps. The conversational `implement` route and its additional skill are outside
-this installation; preserve the existing selected set until separately assigned. Other selected
-skill directories are unchanged copies of the assigned approved source.
+The installed `implement-spec` delegates per-ticket execution to its required `implement` dependency.
+Its support skills (`tdd`, `code-review`, and `classify-change`) are installed with it. Both implementation
+entrypoints retain the approved model-invocable metadata; this dependency update preserves the project
+routes and delivery gates above. All six directories are unchanged copies of the assigned approved source.

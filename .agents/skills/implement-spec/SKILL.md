@@ -1,10 +1,11 @@
 ---
 name: implement-spec
-description: "Implement the result of /to-spec and /to-tickets in code."
-disable-model-invocation: true
+description: "Implement an assigned whole specification or a prepared graph of separately verifiable software/tooling tasks with native workers and an integration branch. Use after implement prepares a task graph from an authorized conversational assignment."
 ---
 
-You have been provided a spec. This spec should have tickets associated with it, describing how to implement the spec.
+You have been provided a specification and its task graph, either supplied by the owner or captured
+from an authorized assignment through `implement`. If these records are incomplete, use `implement`'s
+capture steps before dispatch. Keep the assigned result and approved dependencies intact.
 
 An explicit owner request to implement the whole specification invokes this workflow, whether the
 owner names the skill or uses natural language. A request to launch that work in another session
@@ -28,7 +29,7 @@ Communication to and from subagents should be sparse. Communicate primarily thro
 
 1. Read the spec and tickets to understand the task graph.
    For a project enabling classification in root `WORKFLOW.md`, invoke `classify-change` for provisional assessment.
-   Preserve the owner-approved ticket graph; unconfigured projects keep their existing route.
+   Preserve the agreed ticket graph; unconfigured projects keep their existing classification route.
 
 2. (optional) Use an **exploration subagent** to conduct any exploration required by the tickets - relevant codebase files or external documentation. Ensure the exploration subagent can save files - it should save its markdown notes in a directory outside the repo, accessible by all future subagents. This lets **implementer subagents** focus on implementation rather than exploration.
 
@@ -36,13 +37,9 @@ Communication to and from subagents should be sparse. Communicate primarily thro
 
 4. Use a fresh **implementer subagent** for each ticket, each in its own worktree on its own branch. Each implementer subagent:
    - confirms its worktree is based on the integration branch before starting, and resets onto it if not;
-   - invokes `classify-change` for its ticket when project classification is enabled;
-   - calls the Skill tool with `tdd` to build the ticket;
-   - commits its implementation before actual-change classification and diff-based review;
-   - assesses actual-change risk with `classify-change` after initial implementation, before finalizing ticket review and verification, when enabled;
-   - maintains relevant project risk facts and obtains independent per-ticket `code-review` before integration acceptance;
-   - invokes or reuses applicable participation assessment before any planned protected boundary and satisfies its conditions;
-   - records the actual assessed commit, checks, review outcomes, and participation conditions in the existing ticket/PR;
+   - invokes `implement`'s single-task execution for its supplied ticket, including classification where enabled,
+     behavioral TDD, committed-head independent `code-review`, required checks, and participation conditions;
+   - reports evidence and remaining conditions in its existing ticket/PR before integration acceptance;
    - merges the integration branch tip into its own branch before reporting done;
    - assesses participation on the prepared ticket result and rechecks risk applicability with `classify-change`, when enabled;
    - rechecks review/evidence applicability after integration updates before reporting completion

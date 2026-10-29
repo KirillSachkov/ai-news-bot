@@ -108,3 +108,9 @@ procedure and [WORKFLOW.md](../WORKFLOW.md), outside synchronized skills. Classi
 uses the declaration in that root workflow; installing shared mechanics does not approve a policy.
 This installation provides local discovery; cloud execution readiness still requires verification
 in the cloud runtime.
+
+The installed `implement-spec` retains this project's explicit whole-specification route and manual
+invocation metadata. It applies the fresh-worker-context update while retaining its self-contained
+per-ticket execution steps. The conversational `implement` route and its additional skill are outside
+this installation; preserve the existing selected set until separately assigned. Other selected
+skill directories are unchanged copies of the assigned approved source.

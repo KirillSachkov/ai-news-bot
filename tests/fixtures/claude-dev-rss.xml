@@ -1,0 +1,29 @@
+<?xml version='1.0' encoding='utf-8'?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:ns0="http://www.w3.org/2005/Atom" version="2.0">
+  <channel>
+    <title>claude.dev Blog</title>
+    <link>https://claude.dev/</link>
+    <description>Articles, videos, and build logs from Anthropic’s developers on building with Claude and Claude Code, including tips, tricks, and points of view.</description>
+    <language>en</language>
+    <lastBuildDate>Thu, 15 Oct 2026 12:00:00 GMT</lastBuildDate>
+    <ns0:link href="https://claude.dev/rss.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>How the Claude Code team does code review</title>
+      <link>https://claude.dev/blog/solving-code-review-at-anthropic/</link>
+      <guid isPermaLink="true">https://claude.dev/blog/solving-code-review-at-anthropic/</guid>
+      <pubDate>Thu, 15 Oct 2026 12:00:00 GMT</pubDate>
+      <description>How do you review code at the volume agents produce it? On the Claude Code team, once we had high coverage and deep reviews, we started optimizing for the minimum amount of human review time that doesn't raise reverts or incidents.</description>
+      <dc:creator>Addy Osmani, Morgan Westlee Lunt, and Qing Wang</dc:creator>
+      <category>Engineering</category>
+    </item>
+    <item>
+      <title>Building effective agent automations</title>
+      <link>https://claude.dev/blog/building-effective-agent-automations/</link>
+      <guid isPermaLink="true">https://claude.dev/blog/building-effective-agent-automations/</guid>
+      <pubDate>Thu, 08 Oct 2026 12:00:00 GMT</pubDate>
+      <description>A reference implementation walkthrough with common failure modes</description>
+      <dc:creator>Lance Martin and CJ Avilla</dc:creator>
+      <category>Agents</category>
+    </item>
+  </channel>
+</rss>

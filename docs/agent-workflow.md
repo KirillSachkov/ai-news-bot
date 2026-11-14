@@ -62,6 +62,8 @@ worker identifiers in the local handoff.
 
 Workers implement, diagnose, check, fix and clean up their owned resources.
 The lead accepts results, resolves dependencies and integrates authorized work.
+Each implementation worker follows `implement` single-task execution for its ticket, including
+committed-head review, required checks and any enabled classification checkpoints.
 Run bounded implementation and review workers as native subagents of the active assignment;
 inherit the current agent and model unless the owner selected otherwise. Report unavailable native
 delegation and keep independent review pending instead of substituting standalone sessions.
@@ -78,6 +80,8 @@ validate findings, commit fixes and repeat affected review before acceptance. Be
 each worker includes the current integration tip and rechecks evidence affected by the update.
 Apply [the finding lifecycle](agents/review-findings.md): validate findings, retain IDs and dispositions,
 review relevant unchanged callers and failure paths, and keep Standards and Spec independent.
+When the originating spec is unavailable, retain behavioral Spec review against existing contracts
+and report requirement coverage as unavailable; both axis reports remain required.
 Suppress only findings whose semantics are proven covered by tooling. Track the complete assigned
 base/head across fixes; affected re-review preserves the initial full-diff coverage. Trigger separate
 security review when project policy or concrete uncertainty requires it, and simplification only for

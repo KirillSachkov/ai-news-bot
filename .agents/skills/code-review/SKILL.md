@@ -45,7 +45,7 @@ Look for the originating spec, in this order:
 1. Issue references in the commit messages (`#123`, `Closes #45`, GitLab `!67`, etc.), fetched via the workflow in the tracker doc.
 2. A path the user passed as an argument.
 3. A spec file under `docs/`, `specs/`, or `.scratch/` matching the branch name or feature.
-4. A bounded issue or supplied task with accepted criteria is a valid source; a full `to-spec` document is not required. Read linked requirements and decisions. If no source is found, ask; mark Spec review unavailable rather than claiming a pass.
+4. A bounded issue or supplied task with accepted criteria is a valid source; a full `to-spec` document is not required. Read linked requirements and decisions. If no source is found, ask where required by the project and mark requirement coverage unavailable rather than claiming a pass. Retain independent behavioral review when the harness requires it.
 
 ### 3. Identify the standards sources
 
@@ -88,7 +88,7 @@ Issue both sub-agent calls together, in the foreground, and aggregate the report
 - The agreed human checkpoints and available verification evidence. Independently compare requirements, the complete diff, and evidence against human-participation rules reached through target `AGENTS.md` (inline or linked; no particular human-review filename is required). Report missed human-check triggers, unsupported exemptions, and stale or insufficient evidence inside the Spec report. State any remaining human question and affected behavior; an agent's review does not complete the human check.
 - The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. Under 400 words."
 
-If the spec is missing, skip the Spec sub-agent and note this in the final report.
+If the spec is missing, follow the target project's review policy. When it requires the independent behavioral/Spec axis, retain that reviewer with the actual task, diff and available evidence, explicitly marking unavailable requirement coverage. Otherwise report that the Spec axis was unavailable; never report an absent requirement review as a pass.
 
 ### 5. Aggregate
 

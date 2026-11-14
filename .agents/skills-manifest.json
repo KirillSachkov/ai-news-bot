@@ -4,31 +4,31 @@
   "skills": [
     {
       "provider": "agent-kit",
-      "ref": "257dd644eb338442e86237532cfe38bd74ba532e",
+      "ref": "b1608ac14d8f934a8686a0c583f1110466a18b18",
       "skill": "implement",
       "destination": ".agents/skills/implement"
     },
     {
       "provider": "agent-kit",
-      "ref": "257dd644eb338442e86237532cfe38bd74ba532e",
+      "ref": "b1608ac14d8f934a8686a0c583f1110466a18b18",
       "skill": "implement-spec",
       "destination": ".agents/skills/implement-spec"
     },
     {
       "provider": "agent-kit",
-      "ref": "257dd644eb338442e86237532cfe38bd74ba532e",
+      "ref": "b1608ac14d8f934a8686a0c583f1110466a18b18",
       "skill": "tdd",
       "destination": ".agents/skills/tdd"
     },
     {
       "provider": "agent-kit",
-      "ref": "257dd644eb338442e86237532cfe38bd74ba532e",
+      "ref": "b1608ac14d8f934a8686a0c583f1110466a18b18",
       "skill": "code-review",
       "destination": ".agents/skills/code-review"
     },
     {
       "provider": "agent-kit",
-      "ref": "257dd644eb338442e86237532cfe38bd74ba532e",
+      "ref": "b1608ac14d8f934a8686a0c583f1110466a18b18",
       "skill": "setup-matt-pocock-skills",
       "destination": ".agents/skills/setup-matt-pocock-skills"
     }

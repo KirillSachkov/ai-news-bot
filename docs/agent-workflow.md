@@ -125,7 +125,7 @@ CI, merge and deployment. A worker completion message or a closed Issue alone do
 
 Portable procedures are whole-folder copies of
 [Agent Kit](https://github.com/KirillSachkov/agent-kit) pinned to
-`257dd644eb338442e86237532cfe38bd74ba532e`: `implement`, `implement-spec`, `tdd`,
+`b1608ac14d8f934a8686a0c583f1110466a18b18`: `implement`, `implement-spec`, `tdd`,
 `code-review` and `setup-matt-pocock-skills`. The explicit selection is in
 [the manifest](../.agents/skills-manifest.json); [the installer lock](../.agents/skills-lock.json)
 records provider, revision and complete installed identities, including notices and native metadata.

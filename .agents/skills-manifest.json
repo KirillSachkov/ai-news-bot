@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "installation": "copies",
+  "skills": [
+    {
+      "provider": "agent-kit",
+      "ref": "257dd644eb338442e86237532cfe38bd74ba532e",
+      "skill": "implement",
+      "destination": ".agents/skills/implement"
+    },
+    {
+      "provider": "agent-kit",
+      "ref": "257dd644eb338442e86237532cfe38bd74ba532e",
+      "skill": "implement-spec",
+      "destination": ".agents/skills/implement-spec"
+    },
+    {
+      "provider": "agent-kit",
+      "ref": "257dd644eb338442e86237532cfe38bd74ba532e",
+      "skill": "tdd",
+      "destination": ".agents/skills/tdd"
+    },
+    {
+      "provider": "agent-kit",
+      "ref": "257dd644eb338442e86237532cfe38bd74ba532e",
+      "skill": "code-review",
+      "destination": ".agents/skills/code-review"
+    },
+    {
+      "provider": "agent-kit",
+      "ref": "257dd644eb338442e86237532cfe38bd74ba532e",
+      "skill": "setup-matt-pocock-skills",
+      "destination": ".agents/skills/setup-matt-pocock-skills"
+    }
+  ],
+  "clients": [
+    "codex",
+    "claude"
+  ]
+}

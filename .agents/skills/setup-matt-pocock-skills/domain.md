@@ -1,51 +1,26 @@
-# Domain Docs
+# Project domain documents
 
-How the engineering skills should consume this repo's domain documentation when exploring the codebase.
+Read the target root `AGENTS.md` and keep its existing domain/glossary, context-map
+and ADR pointers. `GLOSSARY.md`, `DOMAIN.md` and established context-specific layouts
+are valid. A different filename is not evidence that migration is needed.
 
-## Before exploring, read these
+For a new project with no declared layout, propose one single-context glossary
+and an ADR directory. Choose names with the owner under the project's requirements
+rules, then record exactly those pointers in its authority file. Multiple contexts
+need a map only when the domain actually has distinct vocabularies; do not infer
+that from a package count alone.
 
-- **`GLOSSARY.md`** at the repo root, or
-- **`GLOSSARY-MAP.md`** at the repo root if it exists: it points at one `GLOSSARY.md` per context. Read each one relevant to the topic.
-- **`docs/adr/`**: read ADRs that touch the area you're about to work in. In multi-context repos, also check `src/<context>/docs/adr/` for context-scoped decisions.
+## Reading rules
 
-If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates them lazily when terms or decisions actually get resolved.
+Before domain design, exploration, implementation, tests or review, read the glossary
+for the relevant context and ADRs in the area. Use canonical terms rather than
+synonyms the glossary rejects. Follow the map only into contexts relevant to the task.
 
-## File structure
+## Writing rules
 
-Single-context repo (most repos):
-
-```
-/
-├── GLOSSARY.md
-├── docs/adr/
-│   ├── 0001-event-sourced-orders.md
-│   └── 0002-postgres-for-write-model.md
-└── src/
-```
-
-Multi-context repo (presence of `GLOSSARY-MAP.md` at the root):
-
-```
-/
-├── GLOSSARY-MAP.md
-├── docs/adr/                          ← system-wide decisions
-└── src/
-    ├── ordering/
-    │   ├── GLOSSARY.md
-    │   └── docs/adr/                  ← context-specific decisions
-    └── billing/
-        ├── GLOSSARY.md
-        └── docs/adr/
-```
-
-## Use the glossary's vocabulary
-
-When your output names a domain concept (in an issue title, a refactor proposal, a hypothesis, a test name), use the term as defined in `GLOSSARY.md`. Don't drift to synonyms the glossary explicitly avoids.
-
-If the concept you need isn't in the glossary yet, that's a signal: either you're inventing language the project doesn't use (reconsider) or there's a real gap (note it for `/domain-modeling`).
-
-## Flag ADR conflicts
-
-If your output contradicts an existing ADR, surface it explicitly rather than silently overriding:
-
-> _Contradicts ADR-0007 (event-sourced orders), but worth reopening because…_
+Use `domain-modeling` for agreed vocabulary and ADR changes. Keep definitions free
+of code details and implementation plans. A spec contains behavior and acceptance;
+ADRs record consequential trade-offs; the glossary defines the language used by both.
+Create records when there is a resolved term or decision, rather than empty scaffolds.
+Preserve an established layout until the owner explicitly accepts a migration and
+its consumer updates.

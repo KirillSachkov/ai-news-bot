@@ -1,39 +1,6 @@
 {
   "schema_version": 1,
   "skills": {
-    "implement-spec": {
-      "path": ".agents/skills/implement-spec/SKILL.md",
-      "sha256": "b61c7d25a43ef377b44bb6395a96f90017a9cc6909d0d1af453be9080755e217",
-      "owner": "project",
-      "adapted": false,
-      "files": {
-        "SKILL.md": "b61c7d25a43ef377b44bb6395a96f90017a9cc6909d0d1af453be9080755e217",
-        "agents/openai.yaml": "fde8416260ed2fe29f9231bfa296756b1e60be4f05450dfd39a3deb2038ec60d"
-      }
-    },
-    "tdd": {
-      "path": ".agents/skills/tdd/SKILL.md",
-      "sha256": "c0be0d59b05bcca8fb23de13ea6a354f61406d589bf86a06b9ee6ab165c37786",
-      "owner": "project",
-      "adapted": false,
-      "files": {
-        "SKILL.md": "c0be0d59b05bcca8fb23de13ea6a354f61406d589bf86a06b9ee6ab165c37786",
-        "agents/openai.yaml": "ea6f01cf1b8c06a4b0f5b649d74b1b8ce8685e72af1b38d70d877693e092af0b",
-        "mocking.md": "3ceb807fdf4a47d6a93d4d9a891e5ba6d362a6247bd08adc451feebfc17361ef",
-        "tests.md": "859f9e592c188fda4fc7277dd180e4ce9c7a2e13f6efe1f6f29eccc9d28c106a"
-      }
-    },
-    "code-review": {
-      "path": ".agents/skills/code-review/SKILL.md",
-      "sha256": "0a05169e81db196799103ed09622e299e065ce15abaefc5cd6a8a3b1f20caa60",
-      "owner": "project",
-      "adapted": false,
-      "files": {
-        "SKILL.md": "0a05169e81db196799103ed09622e299e065ce15abaefc5cd6a8a3b1f20caa60",
-        "agents/openai.yaml": "8229ca854e11dc8e6aef2131ee03f31fb1561cf905fab9ccc325180cf3331352",
-        "references/findings.md": "8d685db5ceb4d62b4952ee021665d502e49f23483ae7b2f98fdf97f03ed4fe6a"
-      }
-    },
     "classify-change": {
       "path": ".agents/skills/classify-change/SKILL.md",
       "sha256": "089285ae3627a8a9eb2b6982f96ff2f2f0da4e2696241eef6df69fb29cd6e25f",
@@ -44,32 +11,6 @@
         "agents/openai.yaml": "4c87b3cc61bfe31cad74d9efe367eec9f7b6b7658faf0c60e54405e897275fe6",
         "references/owner-participation.md": "9d6f353905cc749ac7c82cf9d6796b3ad116bb9246d0c0d4f540044d178320af",
         "references/risk-assessment.md": "80de72be09974c2c79a8b39205628dea925dc5229c841eed84bb3016e458dac9"
-      }
-    },
-    "setup-matt-pocock-skills": {
-      "path": ".agents/skills/setup-matt-pocock-skills/SKILL.md",
-      "sha256": "82168a987cf8208c39b4102ea4204f7aaaf75782fbeff24d69308378111fe70b",
-      "owner": "project",
-      "adapted": false,
-      "files": {
-        "SKILL.md": "82168a987cf8208c39b4102ea4204f7aaaf75782fbeff24d69308378111fe70b",
-        "agents/openai.yaml": "9527de0110541c45712319025155aeab8dc7d77c6ed6e5e83271bab1851ab939",
-        "classification-setup.md": "227259640c3bee44bc8476b883d6e60c39c667a6dcf856b33559e46b360396af",
-        "domain.md": "593a7042218689f1d24df89df14eaf0a20e19e0d0a7d479a01947ac78f0784b9",
-        "issue-tracker-github.md": "6fdb3e9b00b7b0b115ecac3b1c00e3790f637f190abf598815368722c0a94692",
-        "issue-tracker-gitlab.md": "25bdb97e33c546ab8c6d66104c9c22233567ad396cb148f1da687cee4dbd1d0c",
-        "issue-tracker-local.md": "7dcda20a2eb4bdc89b95d1143423c0691309921cadae3132e6424f371030506e",
-        "triage-labels.md": "ae512af838c78b8750471c42cd2b20fa32319553e61d84c9a23d171b40ce14aa"
-      }
-    },
-    "implement": {
-      "path": ".agents/skills/implement/SKILL.md",
-      "sha256": "6467e969acb6ea4b38401230fb5a1e029f9d55afe13aa05cc9de8553105b603d",
-      "owner": "project",
-      "adapted": false,
-      "files": {
-        "SKILL.md": "6467e969acb6ea4b38401230fb5a1e029f9d55afe13aa05cc9de8553105b603d",
-        "agents/openai.yaml": "71b47a5cf2f39997f25a945bca880f4f2394ceb63a65bb4f3b1373d4287253bd"
       }
     }
   }

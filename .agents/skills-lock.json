@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "skills": {
+    ".agents/skills/implement": {
+      "provider": "agent-kit",
+      "ref": "b1608ac14d8f934a8686a0c583f1110466a18b18",
+      "skill": "implement",
+      "destination": ".agents/skills/implement",
+      "sha256": "95b6a07f828b4a0f0ecc231ecf09f630b55b74f330f44f1b0f3e4f0dcca78eda"
+    },
+    ".agents/skills/implement-spec": {
+      "provider": "agent-kit",
+      "ref": "b1608ac14d8f934a8686a0c583f1110466a18b18",
+      "skill": "implement-spec",
+      "destination": ".agents/skills/implement-spec",
+      "sha256": "38413f91b0b32b75de5ef0a2a709e2416ebab35af5554ffd42d27ef9e05310eb"
+    },
+    ".agents/skills/tdd": {
+      "provider": "agent-kit",
+      "ref": "b1608ac14d8f934a8686a0c583f1110466a18b18",
+      "skill": "tdd",
+      "destination": ".agents/skills/tdd",
+      "sha256": "8ea0f80d2931857272cfdb154dbe4a1fa7a148c6445ae5aa9fc7cc2ef0d45be9"
+    },
+    ".agents/skills/code-review": {
+      "provider": "agent-kit",
+      "ref": "b1608ac14d8f934a8686a0c583f1110466a18b18",
+      "skill": "code-review",
+      "destination": ".agents/skills/code-review",
+      "sha256": "a4427a27ed737f25cba68918f51f0c290a4a76177e593fb5e8e4b4d7d4c97963"
+    },
+    ".agents/skills/setup-matt-pocock-skills": {
+      "provider": "agent-kit",
+      "ref": "b1608ac14d8f934a8686a0c583f1110466a18b18",
+      "skill": "setup-matt-pocock-skills",
+      "destination": ".agents/skills/setup-matt-pocock-skills",
+      "sha256": "e31a9dee7519cdc3a501013f1ac66978773a5fc6b7da52be282c10ff285c8aca"
+    }
+  }
+}

@@ -1,19 +1,16 @@
 ---
 name: code-review
-description: "Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes: Standards (does the code follow this repo's documented coding standards?) and Spec (requirements, behavioral regressions, existing callers, and root-cause correctness). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to \"review since X\"."
+description: "Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes: Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to \"review since X\"."
 ---
 
-Two-axis review of the diff between `HEAD` and a fixed point the user supplies:
+Two-axis review of the diff between an immutable reviewed head and a fixed point the caller supplies:
 
 - **Standards**: does the code conform to this repo's documented coding standards?
-- **Spec**: does the change implement requirements while preserving existing behavior and callers?
+- **Spec**: does the code faithfully implement the originating issue / spec?
 
 Both axes run as **parallel sub-agents** so they don't pollute each other's context, then this skill aggregates their findings. Start every sub-agent with a fresh context window.
 
-Use the project-configured tracker, including an explicit tracker in `AGENTS.md` or the supplied assignment.
-For a small change whose project explicitly permits a PR task surface, use its prepared PR description
-as the supplied task record without requiring a separate issue tracker. If neither source is available,
-ask the user to run `/setup-matt-pocock-skills`.
+Read target root `AGENTS.md` and its review, testing, tracker and human-participation pointers. The rules may be inline or linked; do not require a particular `docs/agents` layout. A supplied specification can support review without a tracker.
 
 ## Process
 
@@ -21,20 +18,34 @@ ask the user to run `/setup-matt-pocock-skills`.
 
 Whatever the user said is the fixed point (a commit SHA, branch name, tag, `main`, `HEAD~5`, etc.). If they didn't specify one, ask for it.
 
-Resolve and record the immutable base and head commits, then use `git diff <base>...<head>` and `git log <base>..<head> --oneline`.
-Account for uncommitted task changes before dispatch: commit them under the implementation route, or report the review boundary as incomplete.
-Use the same immutable inputs for both workers. Record the applicable policy revision and prior findings when continuing review.
+Resolve the base and reviewed endpoint to immutable Git objects. Use the project's
+commit/review order:
 
-Before going further, confirm the fixed point resolves (`git rev-parse <fixed-point>`) and the diff is non-empty. A bad ref or empty diff should fail here, not inside two parallel sub-agents.
+- For committed work, capture base/head commit SHAs, `git diff <base>...<head>` and
+  `git log <base>..<head> --oneline`. Uncommitted changes are outside that endpoint;
+  report them and do not imply they were reviewed.
+- If the project requires review before its branch commit, use its snapshot helper
+  or capture only the assigned paths into an immutable Git tree with a temporary
+  index outside the real index. Start from the base tree, stage explicitly scoped
+  tracked/untracked changes, then `write-tree`; preserve the actual index, branch,
+  ignored configuration and unrelated work. Record base commit, snapshot tree SHA,
+  scope and `git diff <base> <snapshot-tree>`. There is no commit log for that snapshot.
+  Both reviewers read this exact tree and its files, not the moving working directory.
+
+Validate the endpoints and nonempty diff before delegation. Read surrounding files
+from the pinned commit/tree when the working directory differs. After pre-commit
+review, verify that the delivered commit tree matches the snapshot; changed content
+needs affected checks and review again. Record the reviewed tree and delivered commit
+separately. Do not force an early branch commit to bypass the project's order.
 
 ### 2. Identify the spec source
 
 Look for the originating spec, in this order:
 
-1. Issue references in the commit messages (`#123`, `Closes #45`, GitLab `!67`, etc.), fetched through the project-configured tracker workflow.
-2. A supplied assignment, authorized PR task description, or path passed as an argument.
+1. Issue references in the commit messages (`#123`, `Closes #45`, GitLab `!67`, etc.), fetched via the workflow in the tracker doc.
+2. A path the user passed as an argument.
 3. A spec file under `docs/`, `specs/`, or `.scratch/` matching the branch name or feature.
-4. If nothing is found, ask the user where the spec is. If they say there isn't one, the **Spec** sub-agent will report missing requirement coverage and retain behavioral review.
+4. A bounded issue or supplied task with accepted criteria is a valid source; a full `to-spec` document is not required. Read linked requirements and decisions. If no source is found, ask where required by the project and mark requirement coverage unavailable rather than claiming a pass. Retain independent behavioral review when the harness requires it.
 
 ### 3. Identify the standards sources
 
@@ -43,7 +54,7 @@ Search the repo for every file that documents how code should be written. When `
 On top of whatever the repo documents, the Standards axis always carries the **smell baseline** below: a fixed set of Fowler code smells (_Refactoring_, ch.3) that applies even when a repo documents nothing. Two rules bind it:
 
 - **The repo overrides.** A documented repo standard always wins; where it endorses something the baseline would flag, suppress the smell.
-- **Always a judgement call.** Each smell is a labelled heuristic ("possible Feature Envy"), never a hard violation. Suppress a finding only within proven tooling coverage. Review semantic cases outside that coverage.
+- **Always a judgement call.** Each smell is a labelled heuristic ("possible Feature Envy"), never a hard violation. Like any standard here, skip anything tooling already enforces.
 
 Each smell reads *what it is* → *how to fix*; match it against the diff:
 
@@ -66,32 +77,22 @@ Issue both sub-agent calls together, in the foreground, and aggregate the report
 
 **Standards sub-agent prompt** should include:
 
-- The full diff command and commit list.
+- The exact pinned diff command, endpoint kinds and commit list when applicable.
 - The list of standards-source files you found in step 3, **plus the smell baseline from step 3** pasted in full (the sub-agent has no other access to it).
-- The brief: "Report, per file/hunk where relevant, (a) every place the diff violates a documented standard: cite the standard (file + the rule); and (b) any baseline smell you spot: name it and quote the hunk. Distinguish hard violations from judgement calls: documented-standard breaches can be hard, but baseline smells are always judgement calls, and a documented repo standard overrides the baseline. Suppress only proven tooling-covered cases; review remaining semantic cases. Under 400 words."
+- The brief: "Report, per file/hunk where relevant, (a) every place the diff violates a documented standard: cite the standard (file + the rule); and (b) any baseline smell you spot: name it and quote the hunk. Distinguish hard violations from judgement calls: documented-standard breaches can be hard, but baseline smells are always judgement calls, and a documented repo standard overrides the baseline. Skip anything tooling enforces. Under 400 words."
 
 **Spec sub-agent prompt** should include:
 
 - The diff command and commit list.
 - The path or fetched contents of the spec.
-- The brief: "Check missing or partial requirements, unintended scope, and incorrectly implemented requirements. Trace changed contracts into existing callers and neighboring scenarios beyond the diff. Examine repeated requests, concurrency, failure recovery, data integrity, and access boundaries where relevant. For a bug fix, check whether it addresses the root cause rather than one symptom. Cite the relevant requirement for requirement findings; behavior findings can cite existing contracts instead. Report concise evidence using the finding lifecycle reference."
+- The agreed human checkpoints and available verification evidence. Independently compare requirements, the complete diff, and evidence against human-participation rules reached through target `AGENTS.md` (inline or linked; no particular human-review filename is required). Report missed human-check triggers, unsupported exemptions, and stale or insufficient evidence inside the Spec report. State any remaining human question and affected behavior; an agent's review does not complete the human check.
+- The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. Under 400 words."
 
-If the spec is missing, retain Spec behavioral review using existing contracts. Report that requirement coverage is unavailable.
+If the spec is missing, follow the target project's review policy. When it requires the independent behavioral/Spec axis, retain that reviewer with the actual task, diff and available evidence, explicitly marking unavailable requirement coverage. Otherwise report that the Spec axis was unavailable; never report an absent requirement review as a pass.
 
-Give both workers the [finding lifecycle](references/findings.md), prior finding decisions, and applicable project contracts.
-Keep Standards and Spec independent. Use native worker routing required by the project.
+### 5. Aggregate
 
-Assign separate security review when classification, project policy, or discovered uncertainty requires it.
-Record its trigger, checked inputs, and result; an overall risk label alone does not select security checks.
-Assign a simplification pass only for evidenced complexity, duplication, or excessive scope. Preserve agreed behavior and rerun affected checks.
-These conditional passes supplement the two axes rather than duplicate them.
-
-### 5. Validate, aggregate, and converge
-
-Validate findings against cited code, contracts, and evidence before acting. Apply the [finding lifecycle](references/findings.md).
-Record stable finding IDs, validation, delivery dispositions, actual checked revisions, and next actions in the existing issue/PR.
-Keep review-cycle counts across worker replacements and session interruptions.
-
+Name checked base/head and requirement sources. For each finding, give a stable reference, triggering condition, source rule, location, and consequence. Distinguish blocking defects from optional suggestions. On re-review, read the earlier report and check corrections, affected interactions, and closure of earlier findings. Broaden the review when requirements or wider interactions change. Return the reports to the caller; reviewers remain read-only.
 
 Present the two reports under `## Standards` and `## Spec` headings, verbatim or lightly cleaned. Do **not** merge or rerank findings, because the two axes are deliberately separate (see _Why two axes_).
 

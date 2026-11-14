@@ -1,64 +1,52 @@
 ---
 name: implement-spec
-description: "Implement an assigned whole specification or a prepared graph of separately verifiable software/tooling tasks with native workers and an integration branch. Use after implement prepares a task graph from an authorized conversational assignment."
+description: "Execute an assigned specification and its dependency graph under the target project's start, delegation and delivery rules. Use when the owner assigns a whole spec and the project's required start is satisfied."
 ---
 
-You have been provided a specification and its task graph, either supplied by the owner or captured
-from an authorized assignment through `implement`. If these records are incomplete, use `implement`'s
-capture steps before dispatch. Keep the assigned result and approved dependencies intact.
+Read root `AGENTS.md` and its requirements, worktree, testing, human-participation,
+tracker and delivery pointers. Satisfy its start rule before writing. Confirm the
+approved spec, tickets, criteria, blockers and human checkpoints. An authorized
+spec run covers its agreed child tasks, not new requirements.
 
-An explicit owner request to implement the whole specification invokes this workflow, whether the
-owner names the skill or uses natural language. A request to launch that work in another session
-assigns execution to the destination session; the launcher's responsibility follows its handoff scope.
-Run bounded workers as native subagents under the project's rules. Independent owner sessions
-participate only under an explicit coordination assignment; launching one does not make it a worker.
+The goal is the assigned spec delivered in the project's selected mode: ticket
+PRs or an approved integration branch. Record an immutable review base against
+the intended target. This procedure does not choose another acceptance mode.
 
-The issue tracker should have been provided to you. If not, tell the user to run `/setup-matt-pocock-skills`.
-
-The goal is the entire spec implemented on a single **integration branch**, with every ticket resolved the way the issue tracker closes work.
-
-The tickets are not a list of steps. They are a **task graph** with blocking relationships between them. This means there is always a **frontier** of tickets which are ready to be grabbed.
-
-Start every subagent with a fresh context window.
-
-Communication to and from subagents should be sparse. Communicate primarily through **context pointers**: to the spec, tickets, research notes, and previous commits. Don't duplicate information already available via pointers.
-
-**Implementer subagents** should be run in the background where possible for maximum concurrency.
+Tickets form a **task graph** with blocking relationships and a ready **frontier**.
+Start each native subagent with a fresh context. Communicate through short context
+pointers to the spec, ticket, research and commits, rather than copying their bodies.
+Run independent workers in the background where the client and project permit it.
+A native subagent is not an independently assigned application session.
 
 ## Steps
 
-1. Read the spec and tickets to understand the task graph.
-   For a project enabling classification in root `WORKFLOW.md`, invoke `classify-change` for provisional assessment.
-   Preserve the agreed ticket graph; unconfigured projects keep their existing classification route.
-
-2. (optional) Use an **exploration subagent** to conduct any exploration required by the tickets - relevant codebase files or external documentation. Ensure the exploration subagent can save files - it should save its markdown notes in a directory outside the repo, accessible by all future subagents. This lets **implementer subagents** focus on implementation rather than exploration.
-
-3. Create the integration branch. If the issue tracker closes work through PRs, or the user asks for one, open a draft PR after the first merge in step 5 (a branch with no commits ahead of main can't open one), marked as closing the spec and tickets.
-
-4. Use a fresh **implementer subagent** for each ticket, each in its own worktree on its own branch. Each implementer subagent:
-   - confirms its worktree is based on the integration branch before starting, and resets onto it if not;
-   - invokes `implement`'s single-task execution for its supplied ticket, including classification where enabled,
-     behavioral TDD, committed-head independent `code-review`, required checks, and participation conditions;
-   - reports evidence and remaining conditions in its existing ticket/PR before integration acceptance;
-   - merges the integration branch tip into its own branch before reporting done;
-   - assesses participation on the prepared ticket result and rechecks risk applicability with `classify-change`, when enabled;
-   - rechecks review/evidence applicability after integration updates before reporting completion
-
-5. Once an **implementer subagent** completes independent ticket review, merge its work with a **merger subagent**.
-   Honor earlier owner gates before consequential actions. Acceptance required only before final merge permits isolated integration-branch assembly.
-
-6. If this changes the **frontier** of available tickets, kick off more **implementer subagents** to work on the new tickets. This allows for maximum concurrency.
-
-7. Once all tickets are complete, assess integrated actual-change risk with `classify-change`, when enabled, before finalizing review and verification.
-   Account for cross-ticket interactions and complete assigned verification. Invoke or reuse participation assessment before planned protected boundaries.
-   Call the Skill tool with `code-review` on the integration branch. Validate and resolve blocking findings under `code-review` in a single fresh **implementer subagent**.
-   Commit fixes before affected re-review; retain dispositions for optional suggestions and unrelated unchanged defects.
-
-8. For enabled projects, assess participation on the final prepared integrated result and recheck risk/evidence applicability through `classify-change`.
-   Complete required verification and review; reassess conclusions affected by fixes or policy changes.
-   Satisfy participation conditions and preserve evidence in the existing issue/PR before authorized final merge.
-   Project workflow determines assigned delivery completion; deployment retains its separate gates.
-
-9. If a draft PR exists, mark it ready for review. Otherwise, resolve each ticket the way the issue tracker closes work, and report the integration branch.
-
-10. Clean up all **implementer subagent** worktrees.
+1. Read the spec and ticket graph. Resolve dependency and acceptance conditions.
+2. If exploration is needed, a fresh exploration subagent can write scoped notes
+   outside the repo, accessible to later workers. Read-only exploration does not
+   start another implementation beyond the approved graph.
+3. Prepare the owned execution context under project policy. In integration mode,
+   prepare its branch/worktree and draft at the required point. In ticket-PR mode,
+   each ticket follows its own delivery and dependency-merge gates. A main-checkout
+   project keeps its prescribed context and serialized writers.
+4. Use a fresh implementer for each ready ticket when native delegation is available.
+   Use separate owned worktrees/branches when permitted; serialize writers where the
+   project requires one main checkout. Each worker:
+   - verifies ownership and required immutable base; reports mismatch without reset;
+   - reads the project contract and task, uses `tdd` where required, and observes
+     accepted testing seams and human checkpoints;
+   - returns committed changes, checked revisions, evidence and blockers. Integration
+     workers update from the integration tip only by the project's permitted procedure.
+5. In integration mode, integrate child work with a fresh merger under project rules.
+   In ticket-PR mode, deliver each ticket and wait for its required acceptance/merge
+   before unblocking dependents. A worker's done status is not acceptance.
+6. Recompute the frontier from proven dependency outcomes and start newly ready work.
+   Keep independent authorized work moving while owner decisions are pending.
+7. At required ticket/integration checkpoints, pass checks and follow the project's
+   commit/review order. Supply immutable base/head, or an owned pre-commit tree
+   snapshot when required, and requirements to `code-review`. Fix findings in an owned
+   context, rerun affected checks, freeze the corrected revision and re-review with earlier reports. Preserve
+   initial full-diff coverage. Invoke a named skill through the client's mechanism or
+   read its `SKILL.md` and relevant references; a literal Skill tool is not required.
+8. Follow root delivery pointers for the verified result, reusing existing drafts.
+9. Clean only owned, integrated child resources with no active writer or unsaved work.
+   Follow project rules for retained acceptance trees and unintegrated results.

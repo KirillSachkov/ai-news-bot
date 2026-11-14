@@ -14,3 +14,5 @@ editorial quality, cost or unintended delivery. Reassess when the owner reviews 
 policy grounded in [product behaviour](README.md) and [the audit](docs/audit-2026-10-07.md),
 including verification and participation rules. Until that choice is accepted, existing checks,
 review and action permissions continue to apply; the installed classifier grants no new authority.
+
+Reassessment follows [the project classification setup](docs/agents/classification-setup.md).

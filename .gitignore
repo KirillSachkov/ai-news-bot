@@ -19,3 +19,6 @@ venv/
 *.swp
 .idea/
 .vscode/
+
+# Private installer backups
+.agents/skills-backups/
